@@ -1,0 +1,258 @@
+package nginx.servlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.MemoryLayout.PathElement;
+import java.lang.invoke.VarHandle;
+import java.util.Collection;
+import java.util.Locale;
+
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
+import poc.NgCore;
+import poc.NgRequestHandler;
+
+public class NgResponse implements HttpServletResponse {
+	
+	public MemorySegment request;
+	public NgCore ngCore;
+	
+	public NgResponse() {
+		// this.request = request;
+	}
+	
+	NgResponse(MemorySegment request) {
+		this.request = request;
+	}
+
+	@Override
+	public String getCharacterEncoding() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public String getContentType() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public ServletOutputStream getOutputStream() throws IOException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public PrintWriter getWriter() throws IOException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void setCharacterEncoding(String encoding) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private final static VarHandle contentLengthHandle = NgRequestHandler.ngx_http_request_t.varHandle(
+		PathElement.groupElement("headers_out"),
+		PathElement.groupElement("content_length_n")
+	);
+	@Override
+	public void setContentLength(int len) {
+		contentLengthHandle.set(request, 0L, (long) len);
+	}
+
+	@Override
+	public void setContentLengthLong(long len) {
+		contentLengthHandle.set(request, 0L, (long) len);
+	}
+
+	private final static VarHandle contentTypeLenHandle = NgRequestHandler.ngx_http_request_t.varHandle(
+			PathElement.groupElement("headers_out"),
+			PathElement.groupElement("content_type"),
+			PathElement.groupElement("len")
+		);
+	private final static VarHandle contentTypeDataHandle = NgRequestHandler.ngx_http_request_t.varHandle(
+			PathElement.groupElement("headers_out"),
+			PathElement.groupElement("content_type"),
+			PathElement.groupElement("data")
+		);
+	private final static VarHandle contentType_LenHandle = NgRequestHandler.ngx_http_request_t.varHandle(
+			PathElement.groupElement("headers_out"),
+			PathElement.groupElement("content_type_len")
+		);
+	@Override
+	public void setContentType(String type) {
+		Arena arena = Arena.ofAuto();
+		MemorySegment seg = arena.allocateFrom(type);
+		contentTypeDataHandle.set(request, 0L, seg);
+		long len = seg.byteSize()-1;
+		contentTypeLenHandle.set(request, 0L, len);
+		contentType_LenHandle.set(request, 0L, len);
+	}
+
+	@Override
+	public void setBufferSize(int size) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public int getBufferSize() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public void flushBuffer() throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void resetBuffer() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public boolean isCommitted() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void reset() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void setLocale(Locale loc) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public Locale getLocale() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void addCookie(Cookie cookie) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public boolean containsHeader(String name) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public String encodeURL(String url) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public String encodeRedirectURL(String url) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void sendError(int sc, String msg) throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void sendError(int sc) throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void setDateHeader(String name, long date) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void addDateHeader(String name, long date) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void setHeader(String name, String value) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void addHeader(String name, String value) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void setIntHeader(String name, int value) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void addIntHeader(String name, int value) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private final static VarHandle vhStatus = NgRequestHandler.ngx_http_request_t.varHandle(
+		PathElement.groupElement("headers_out"),
+		PathElement.groupElement("status")
+	);
+	@Override
+	public void setStatus(int sc) {
+		vhStatus.set(request, 0L, sc);
+	}
+
+	@Override
+	public int getStatus() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public String getHeader(String name) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Collection<String> getHeaders(String name) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Collection<String> getHeaderNames() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
+}
