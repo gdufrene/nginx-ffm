@@ -2,6 +2,7 @@ package nginx;
 
 import java.lang.foreign.Arena;
 
+import nginx.core.NgGlobal;
 import nginx.core.NgLog;
 import nginx.core.NgPool;
 import poc.NgCore;
@@ -41,7 +42,7 @@ public class Nginx {
 					"-c",
 					"conf/nginx.conf",
 					"-p",
-					"/Users/a723bs/Dev/poc/ffm/nginx/",
+					NgGlobal.NG_HOME,
 					"-e",
 					"/dev/stderr"
 				};
@@ -118,7 +119,7 @@ public class Nginx {
 			 * FFM Request Handler
 			 */
 			NgRequestHandler ffmHandler = new NgRequestHandler(ngCore);
-			ngCore.initFfmHandler(ffmHandler, arena);
+			ngCore.initFfmHandler(ffmHandler, Arena.global());
 			
 			// NgCycle.Types.debugDumpCycleLayout( cycle.ngCycle );
 			
@@ -141,7 +142,9 @@ public class Nginx {
 			// ngCore.singleProcessCycle(cycle);
 			initialized = true;
 			// master process will not return
-			ngCore.masterProcessCycle(cycle);
+			// ngCore.masterProcessCycle(cycle);
+			ngCore.singleProcessCycle(cycle);
+			
 			System.out.println("Nginx masterProcessCycle returned ?");
 		} catch (Throwable e) {
 			throw new RuntimeException("Nginx initialization failed.", e);

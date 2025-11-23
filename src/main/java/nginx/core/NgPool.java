@@ -14,6 +14,9 @@ public interface NgPool {
 	static Optional<NgPool> ngx_create_pool(long size, NgLog log) {
 		return NgPoolImpl.create(size, log);
 	}
+	static NgPool fromSegment(MemorySegment seg) {
+		return new NgPoolImpl(seg);
+	}
 
 	MemorySegment getSegment();
 	
@@ -32,7 +35,7 @@ class NgPoolImpl implements NgPool, NgGlobal {
 	
 	MemorySegment pool;
 	
-	private NgPoolImpl(MemorySegment pool) {
+	NgPoolImpl(MemorySegment pool) {
 		this.pool = pool;
 	}
 	

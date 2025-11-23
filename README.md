@@ -83,8 +83,16 @@ ngCore.initFfmHandler(ffmHandler, arena);
 
 When an http request comes, the ngx_ffm_module is triggered.  
 If upcall succeed, some content is added to handle the http response.  
-Right now, java part is able to set content-type and response status code.  
-The module is producing a "hello world" content as a fixed buffer.  
+
+Right now, java part is able to:
+- get uri and filter requests ( fixed filter /hello right now )
+- set content-type
+- response status code
+- get a PrintWriter and output some content, limited to 4096 bytes
+
+Only works in singleProcess mode (ngx_single_process_cycle).  
+As soon as a memory segment is given to a new java object, it seems to be stuck.  
+The fork of processes in `ngx_master_process_cycle` is maybe interfering with memory management or garbage collector, not sure.
 
 
 ## What next ?
@@ -105,7 +113,8 @@ Of course, only use this project as a pedagogical material, not as some trusted 
     What about implementing an Arena around nginx pool scopes ?
 
 [ ] Implement more servlet operations.
-    Efficient I/O based on nginx pools and buffers seems to be a good idea.
+    First basic OutputStream implementation done over a ngx_buf_t.  
+    Efficient I/O based on nginx pools and buffers seems to be a good idea.  
     Specific Input and OutputStreams should be inspired by https://github.com/nginx/unit/blob/master/src/java/nxt_jni_InputStream.c
 
 

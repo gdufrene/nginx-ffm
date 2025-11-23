@@ -9,8 +9,8 @@ public interface NgGlobal {
 	
 	long NULL = 0L;
 
-	String NG_HOME = System.getenv().getOrDefault("NG_HOME", "nginx/objs");
+	String NG_HOME = System.getenv().getOrDefault("NG_HOME", "nginx");
 	Linker linker = Linker.nativeLinker();
-	SymbolLookup SYMBOL_LOOKUP = SymbolLookup.libraryLookup( Path.of(NG_HOME, "nginx.so"), Arena.global() );
+	SymbolLookup SYMBOL_LOOKUP = SymbolLookup.libraryLookup( Path.of(NG_HOME, "objs/nginx.so"), Arena.global() );
 	
 }

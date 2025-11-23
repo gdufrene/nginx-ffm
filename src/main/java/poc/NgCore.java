@@ -55,12 +55,13 @@ public class NgCore {
 			ngx_dump_config_fn,
 			ngx_http_send_response,
 			ngx_http_send_header,
+			ngx_http_discard_request_body,
 			ngx_create_temp_buffer;
 		
 		public NgCore(Arena arena) {
 			this.arena = arena;
 			this.linker = Linker.nativeLinker();
-			this.NgLib = SymbolLookup.libraryLookup( Path.of(NG_HOME, "nginx.so"), arena);
+			this.NgLib = SymbolLookup.libraryLookup( Path.of(NG_HOME, "objs/nginx.so"), arena);
 			
 
 			ngx_get_options =  linker.downcallHandle(
@@ -219,6 +220,11 @@ public class NgCore {
 				FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS )
 			);
 			
+			ngx_http_discard_request_body = linker.downcallHandle(
+				NgLib.find("ngx_http_discard_request_body").orElseThrow(),
+				FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS )
+			);
+			
 			ngx_create_temp_buffer = linker.downcallHandle(
 				NgLib.find("ngx_create_temp_buf").orElseThrow(),
 				FunctionDescriptor.of( ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG )
@@ -237,7 +243,7 @@ public class NgCore {
 				upcallHandler,
 				FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS ),
 				// arena
-				Arena.ofAuto()
+				arena
 			);
 			
 			NgLib.findOrThrow("ngx_http_ffm_upcall")
@@ -436,8 +442,8 @@ public class NgCore {
 			long pid = current.pid();
 			long ppid = current.parent().map( ProcessHandle::pid ).orElse(-1L);
 			
-			System.out.format("Pid %d.\n", pid);
-			System.out.format("PPid %d.\n", ppid);
+			// System.out.format("Pid %d.\n", pid);
+			// System.out.format("PPid %d.\n", ppid);
 			
 			NgLib.findOrThrow("ngx_pid")
 				.reinterpret(4)
@@ -495,8 +501,22 @@ public class NgCore {
 			// ngx_http_send_response.invokeExact( request, status, ct,  );
 		}
 		
-		public int httpSendHeader(MemorySegment request) throws Throwable {
-			return (int) ngx_http_send_header.invokeExact( request );
+		public int ngx_http_discard_request_body(MemorySegment request) {
+			try {
+				return (int) ngx_http_discard_request_body.invokeExact( request );
+			} catch (Throwable e) {
+				e.printStackTrace();
+				return 500;
+			}
+		}
+		
+		public int httpSendHeader(MemorySegment request) {
+			try {
+				return (int) ngx_http_send_header.invokeExact( request );
+			} catch (Throwable e) {
+				e.printStackTrace();
+				return 500;
+			}
 		}
 		
 		private final static 

@@ -16,10 +16,11 @@ public class NgCoreConf {
 	public NgCoreConf(MemorySegment segment) {
 		this.segment = segment.reinterpret(LAYOUT.byteSize());
 		
-		MemUtils.dump(this.segment);
+		// MemUtils.dump(this.segment);
 		
 		StructLayout str_t = new NgCycle.Types().str_t;
 		
+		/*
 		BiConsumer<String, MemorySegment> printStr = (fieldName, strSeg) -> {
 			// long offset = LAYOUT.byteOffset( PathElement.groupElement(fieldName) );
 			// MemorySegment strSeg = segment.asSlice( offset, str_t.byteSize() );
@@ -43,6 +44,7 @@ public class NgCoreConf {
 		
 		ms = this.segment.asSlice(0xA0, str_t.byteSize());
 		printStr.accept("oldpid", ms);
+		*/
 	}
 
 	public MemorySegment getPidRef() {
@@ -50,12 +52,12 @@ public class NgCoreConf {
 		
 		/* */
 		long offset = LAYOUT.byteOffset( PathElement.groupElement("pid") );
-		System.out.format("offset of pid: 0x%X\n", offset);
+		// System.out.format("offset of pid: 0x%X\n", offset);
 		/* */
 		StructLayout str_t = new NgCycle.Types().str_t;
 		MemorySegment ret = segment.asSlice( offset, str_t.byteSize() );
 		
-		System.out.println( "len -> " + (long) str_t.varHandle( PathElement.groupElement("len") ).get(ret, 0L) );
+		// System.out.println( "len -> " + (long) str_t.varHandle( PathElement.groupElement("len") ).get(ret, 0L) );
 		
 		return ret;
 	}
