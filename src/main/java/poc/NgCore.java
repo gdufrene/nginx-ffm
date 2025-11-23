@@ -55,7 +55,8 @@ public class NgCore {
 			ngx_http_send_response,
 			ngx_http_send_header,
 			ngx_http_discard_request_body,
-			ngx_create_temp_buffer;
+			ngx_create_temp_buffer,
+			ngx_ssl_init;
 		
 		public NgCore(Arena arena) {
 			// this.arena = arena;
@@ -229,6 +230,11 @@ public class NgCore {
 				NgLib.find("ngx_create_temp_buf").orElseThrow(),
 				FunctionDescriptor.of( ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG )
 			);
+			
+			ngx_ssl_init = linker.downcallHandle(
+				NgLib.find("ngx_ssl_init").orElseThrow(),
+				FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS )
+			);
 		}
 		
 		public void initFfmHandler( NgRequestHandler handler, Arena arena ) throws Throwable {
@@ -331,6 +337,10 @@ public class NgCore {
 		
 		public int osInit(NgLog log) throws Throwable {
 			return (int) ngx_os_init.invokeExact( log.getMemorySegment() );
+		}
+		
+		public int ngx_ssl_init(NgLog log) throws Throwable {
+			return (int) ngx_ssl_init.invokeExact( log.getMemorySegment() );
 		}
 		
 		public int saveArgv(NgCycle cycle, String[] args) throws Throwable {

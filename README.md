@@ -95,6 +95,109 @@ As soon as a memory segment is given to a new java object, it seems to be stuck.
 The fork of processes in `ngx_master_process_cycle` is maybe interfering with memory management or garbage collector, not sure.
 
 
+**Tried with tls and http/2 is ok !**
+
+The cool thing is that nginx support tls with openssl and easy configuration for http/2 and http/3.  
+In theory all the request handling can be done by nginx without any change on the java upcall.  
+
+Compile nginx with http/2 http/3 tls :
+
+You will require openssl lib.  
+with homebrew : `brew install openssl`
+
+
+```sh
+./auto/configure --add-module=src/ngx_ffm_module --with-http_ssl_module --with-http_v2_module --with-http_v3_module
+make -j8
+```
+
+The resulted shared library is now ~ 1.2 Mo.
+
+Set-up a chain of certificates to test tls :
+
+```sh
+openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.cert.pem \
+  -sha256 -days 3650 -noenc \
+  -subj "/C=FR/O=BigCompany/OU=BestTeamEver/CN=My-Root-Autority" \
+  -addext "authorityKeyIdentifier=keyid,issuer" \
+  -addext "basicConstraints=CA:TRUE,pathlen:1" \
+  -addext "keyUsage=digitalSignature,cRLSign,keyCertSign"
+
+openssl req -new -sha256 \
+	-subj "/C=FR/O=BigCompany/OU=BestTeamEver/CN=My-Intermediate" \
+  -newkey rsa:4096 -keyout intermediate.key -noenc \
+  -out intermediate.csr.pem 
+
+cat<<eof > intermediate.ext
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:TRUE,pathlen:0
+keyUsage=digitalSignature,cRLSign,keyCertSign
+eof
+
+openssl x509 -req -in intermediate.csr.pem \
+  -CA ca.cert.pem -CAkey ca.key \
+  -days 1825 -extfile intermediate.ext \
+  -out intermediate.cert.pem
+  
+openssl req -new -sha256 \
+	-subj "/C=FR/O=BigCompany/OU=BestTeamEver/CN=mbpdeguillaume-1.home" \
+  -newkey rsa:4096 -noenc -keyout localhost.key \
+  -out localhost.csr.pem
+
+cat <<eof > server.ext
+authorityKeyIdentifier=keyid,issuer
+keyUsage=nonRepudiation,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=@alt_names
+[alt_names]
+DNS.1=localhost
+DNS.2=127.0.0.1
+eof
+
+openssl x509 -req -in localhost.csr.pem \
+ -CA intermediate.cert.pem -CAkey intermediate.key \
+ -days 395 -extfile server.ext \
+ -out localhost.cert.pem
+
+cat localhost.cert.pem intermediate.cert.pem ca.cert.pem > conf/localhost.chain.pem
+chmod 600 localhost.key
+mv localhost.key conf
+```
+
+Add some configuration to `nginx.conf`
+
+```
+http {
+
+	# ...
+
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    server {
+        listen       8443 ssl;
+        
+        http2 on;
+        
+        server_name  localhost;
+        ssl_certificate     localhost.chain.pem;
+        ssl_certificate_key localhost.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+
+	    # ...
+        
+   }
+
+```
+
+Then try some calls with curl or browser :
+
+```sh
+curl -v --cacert ca.cert.pem --http2-prior-knowledge https://localhost:8443/hello
+```
+
+
 ## What next ?
 
 A lot of things to do !

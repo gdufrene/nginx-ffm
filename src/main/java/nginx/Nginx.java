@@ -63,6 +63,11 @@ public class Nginx {
 			NgLog log = NgLog.ngx_log_init( "/dev", "stderr" )
 					.orElseThrow( () -> new RuntimeException("NgLog.ngx_log_init() failed.") );
 			
+			// #if (NGX_OPENSSL) how to detect ? search for OPENSSL_VERSION_TEXT symbol ?
+			if ( ngCore.ngx_ssl_init(log) != NGX_OK ) {
+				throw new RuntimeException("ngCore.ngx_ssl_init() failed.");
+			}
+			
 			
 			NgCycle cycle = new NgCycle(arena, ngCore);
 			cycle.zeroFill();
