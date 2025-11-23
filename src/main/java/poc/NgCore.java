@@ -12,19 +12,18 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.invoke.VarHandle;
-import java.nio.file.Path;
 import java.util.Optional;
 
+import nginx.core.NgGlobal;
 import nginx.core.NgLog;
 
 public class NgCore {
 	
-	static final String NG_HOME = System.getenv().getOrDefault("NG_HOME", "nginx/objs");
+	// static final String NG_HOME = System.getenv().getOrDefault("NG_HOME", "nginx");
 
 		final Linker linker;
 		final SymbolLookup NgLib;
-		final Arena arena;
+		// final Arena arena;
 		
 		final MethodHandle
 			ngx_get_options,
@@ -59,9 +58,10 @@ public class NgCore {
 			ngx_create_temp_buffer;
 		
 		public NgCore(Arena arena) {
-			this.arena = arena;
+			// this.arena = arena;
 			this.linker = Linker.nativeLinker();
-			this.NgLib = SymbolLookup.libraryLookup( Path.of(NG_HOME, "objs/nginx.so"), arena);
+			this.NgLib = NgGlobal.SYMBOL_LOOKUP; 
+					// SymbolLookup.libraryLookup( Path.of(NG_HOME, "objs/nginx.so"), arena);
 			
 
 			ngx_get_options =  linker.downcallHandle(
@@ -269,27 +269,29 @@ public class NgCore {
 			
 			// byte[] srcBytes = src.getBytes();
 
-			MemorySegment srcData = arena.allocateFrom(src);
-			MemorySegment srcLayout = arena.allocate(StringLayout);
-			// LEN.set(srcLayout, src.length());
-			len.set(srcLayout, 0, (int) srcData.byteSize());
-			
-			// DATA.set(srcLayout, srcData);
-			data.set(srcLayout, 0, srcData);
-			
-			MemorySegment dstLayout = arena.allocate(StringLayout);
-			// DATA.set(dstLayout, arena.allocate(4 * ((src.length() / 3) + 1) + 1));
-			data.set(dstLayout, 0, arena.allocate(200) );
-			
-			// MemorySegment ms = arena.allocateFrom(src);
-			ngx_encode_base64.invokeExact( dstLayout, srcLayout );
-			
+			try (Arena arena = Arena.ofConfined()) {
+				MemorySegment srcData = arena.allocateFrom(src);
+				MemorySegment srcLayout = arena.allocate(StringLayout);
+				// LEN.set(srcLayout, src.length());
+				len.set(srcLayout, 0, (int) srcData.byteSize());
+				
+				// DATA.set(srcLayout, srcData);
+				data.set(srcLayout, 0, srcData);
+				
+				MemorySegment dstLayout = arena.allocate(StringLayout);
+				// DATA.set(dstLayout, arena.allocate(4 * ((src.length() / 3) + 1) + 1));
+				data.set(dstLayout, 0, arena.allocate(200) );
+				
+				// MemorySegment ms = arena.allocateFrom(src);
+				ngx_encode_base64.invokeExact( dstLayout, srcLayout );
 				//.get(dstLayout);
-			// int dstLen = (int) LEN.get(dstLayout);
-			long dstLen = (long) len.get(dstLayout, 0L);
-			// MemorySegment b64data = (MemorySegment) DATA.get(dstLayout);
-			MemorySegment b64data = (MemorySegment) data.get(dstLayout, 0L);
-			return new String( b64data.reinterpret(dstLen).toArray(ValueLayout.JAVA_BYTE) );
+				// int dstLen = (int) LEN.get(dstLayout);
+				long dstLen = (long) len.get(dstLayout, 0L);
+				// MemorySegment b64data = (MemorySegment) DATA.get(dstLayout);
+				MemorySegment b64data = (MemorySegment) data.get(dstLayout, 0L);
+				return new String( b64data.reinterpret(dstLen).toArray(ValueLayout.JAVA_BYTE) );
+			}
+			
 			// return result.reinterpret(Integer.MAX_VALUE).getString(0);
 		}
 		
@@ -332,6 +334,8 @@ public class NgCore {
 		}
 		
 		public int saveArgv(NgCycle cycle, String[] args) throws Throwable {
+			Arena arena = Arena.global();
+			
 			MemorySegment argvSegment = arena.allocate(ValueLayout.ADDRESS, args.length);
 			
 			for (int i = 0; i < args.length; i++) {
@@ -413,6 +417,8 @@ public class NgCore {
 		}
 		
 		public int getOptions(String[] args) throws Throwable {
+			Arena arena = Arena.global();
+			
 			MemorySegment argvSegment = arena.allocate(ValueLayout.ADDRESS, args.length);
 			
 			for (int i = 0; i < args.length; i++) {
@@ -478,28 +484,7 @@ public class NgCore {
 				.set( ValueLayout.JAVA_INT, 0L, i );
 		}
 
-		public void httpSendResponse(MemorySegment request, int status, String contentType, String content) throws Throwable {
-			
-			request.asSlice(528, 4).set(ValueLayout.JAVA_INT,  0L, status);  // headers_out.status
-			MemorySegment tempBufferData = arena.allocateFrom( content );
-			request.asSlice(728, 8).set(ValueLayout.JAVA_LONG, 0L, tempBufferData.byteSize() );   // headers_out.content_length_n
-			
-			
-			// r->headers_out.content_type_len = ct->len;
-			request.asSlice(672, 8).set(ValueLayout.JAVA_LONG, 0L, contentType.length());
-			
-	        // r->headers_out.content_type = *ct;
-			MemorySegment ct = createNgStr( contentType );
-			request.asSlice(680, 8).set(ValueLayout.ADDRESS, 0L, ct);
-			
-			httpSendHeader( request );
-			
-			// MemorySegment tempBuffer = ngx_create_temp_buffer.invokeExact( requestPool, content.length() );
-			
-			
-			
-			// ngx_http_send_response.invokeExact( request, status, ct,  );
-		}
+
 		
 		public int ngx_http_discard_request_body(MemorySegment request) {
 			try {
@@ -519,12 +504,12 @@ public class NgCore {
 			}
 		}
 		
+		/*
 		private final static 
 			StructLayout str_t = new NgCycle.Types().str_t;
 		private final static VarHandle
 			STR_LEN = str_t.varHandle( PathElement.groupElement("len") ),
 			STR_DATA = str_t.varHandle( PathElement.groupElement("data") );
-		
 		
 		MemorySegment createNgStr(String str) {
 			MemorySegment strSeg = arena.allocate(str_t);
@@ -532,4 +517,5 @@ public class NgCore {
 			STR_DATA.set( strSeg, 0L, arena.allocateFrom(str) );
 			return strSeg;
 		}
+		*/
 }
