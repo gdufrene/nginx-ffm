@@ -22,7 +22,7 @@ public class NgRequestHandler {
 		PathElement.groupElement("signature")
 	);
 	
-	NgResponse response = new NgResponse();
+	
 	
 	public int handleRequest(MemorySegment reqPtr) {
 		
@@ -38,6 +38,7 @@ public class NgRequestHandler {
 			return NGX_DECLINED;
 		}
 		
+		NgResponse response = new NgResponse();
 		
 		response.request = reqPtr;
 		response.ngCore = this.ngCore;
@@ -53,7 +54,13 @@ public class NgRequestHandler {
 		try {
 
 			PrintWriter out = response.getWriter();
-			out.write("Hello from NGINX Java FFM!\n");
+			String data = "Some data from NGINX Java FFM!\n";
+			int len = data.length();
+			int count = 0;
+			do {
+				out.write( data );
+				count += len;
+			} while ( count < 10000 );
 			// print writer flush data to nginx out chain of buffers
 			out.close();
 			

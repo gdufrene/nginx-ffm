@@ -26,7 +26,8 @@ Applied modifications to allow and ease FFM usage ...
 - expose some static method from nginx.c to use them from Java
 - create a method ngx_get_conf2 to be used rather than ngx_get_conf macro
 - create a method ngx_dump_config_fn to ease config dump display, based on ngx_dump_config test case from main
-- Temp: add some nasty debug as printf 
+- expose a buffer end operation to set some bitfield from java
+- added some debug log
 - Create a module "ngx_ffm_module", inspired from ngx_http_static and documentation sample module
 
 ## Nginx Compilation 
@@ -36,8 +37,8 @@ Checkout repository https://github.com/gdufrene/nginx
 On mac, I use `brew install pcre2 zlib` to get minimal dependencies.
 
 ```sh
-./auto/configure --add-module=src/ngx_ffm_module
-make
+./auto/configure --add-module=src/ngx_ffm_module --with-debug
+make -j8
 ```
 
 It generates `objs/nginx.so` library to be loaded in java.
@@ -48,13 +49,13 @@ It generates `objs/nginx.so` library to be loaded in java.
 - Java >= 25 required.
 - maven 3.9+ suggested.
 
-You must set NG_HOME env as the place where you compiled `nginx.so`.  
+You must set NG_HOME env as the place where you checkout nginx sources, a compiled `nginx.so` should be in objs after compilation.  
 After compiling modified nginx, it should be in "objs" directory.
 
 ```sh
 mvn compile
 mkdir logs
-NG_HOME=/xxx/nginx/objs java --enable-native-access=ALL-UNNAMED -cp target/classes nginx.Nginx
+NG_HOME=/xxx/nginx mvn exec:java
 ```
 
 ## What is done
@@ -88,11 +89,11 @@ Right now, java part is able to:
 - get uri and filter requests ( fixed filter /hello right now )
 - set content-type
 - response status code
-- get a PrintWriter and output some content, limited to 4096 bytes
+- get a PrintWriter and output some content
 
 Only works in singleProcess mode (ngx_single_process_cycle).  
-As soon as a memory segment is given to a new java object, it seems to be stuck.  
 The fork of processes in `ngx_master_process_cycle` is maybe interfering with memory management or garbage collector, not sure.
+In master mode, as soon as a memory segment is given to a new java object, it seems to be stuck (non responsive jvm).  
 
 
 **Tried with tls and http/2 is ok !**
@@ -107,7 +108,7 @@ with homebrew : `brew install openssl`
 
 
 ```sh
-./auto/configure --add-module=src/ngx_ffm_module --with-http_ssl_module --with-http_v2_module --with-http_v3_module
+./auto/configure --add-module=src/ngx_ffm_module --with-http_ssl_module --with-http_v2_module --with-http_v3_module --with-debug
 make -j8
 ```
 
@@ -197,7 +198,99 @@ Then try some calls with curl or browser :
 curl -v --cacert ca.cert.pem --http2-prior-knowledge https://localhost:8443/hello
 ```
 
+**Now with http/3 and curl**
 
+My browser don't try to connect with http/3.  
+My curl is not happy with http/3 neither : `curl: option --http3-only: the installed libcurl version doesn't support this`.  
+
+So, I need to build my own curl with quic http/3 support.  
+
+Starts by getting build dependencies `brew install libtool automake autoconf libpsl openssl libnghttp3 pkgconf`
+
+Then build nghttp3 and curl.  
+Building nghttp3 seems required to get package-config happy in curl autoconf.  
+
+```
+mkdir -p $HOME/tmp/build
+cd $HOME/tmp/build
+git clone https://github.com/ngtcp2/nghttp3
+cd nghttp3
+git submodule update --init
+autoreconf -fi
+mkdir target
+./configure --prefix=$HOME/tmp/build/nghttp3/target --enable-lib-only
+make -j8
+make install
+cd $home/tmp/build
+git clone https://github.com/curl/curl
+cd curl
+autoreconf -fi
+LDFLAGS="-Wl,-rpath,/opt/homebrew/lib" ./configure --with-openssl=/opt/homebrew/Cellar/openssl@3/3.6.0 --with-openssl-quic --with-nghttp3=$HOME/tmp/build/nghttp3/target
+make
+```
+
+So, now you should have `$HOME/tmp/build/nginx/src/curl` binary available ! :)
+
+I suggest `CURL=$HOME/tmp/build/nginx/src/curl`. Then try `$CURL -V`, it should give something like :
+
+```
+curl 8.18.0-DEV (aarch64-apple-darwin24.6.0) libcurl/8.18.0-DEV OpenSSL/3.6.0 zlib/1.2.12 libidn2/2.3.8 libpsl/0.21.5 nghttp2/1.67.0 nghttp3/1.14.0-DEV
+Release-Date: [unreleased]
+Protocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns ldap ldaps mqtt pop3 pop3s rtsp smb smbs smtp smtps telnet tftp ws wss
+Features: alt-svc AsynchDNS HSTS HTTP2 HTTP3 HTTPS-proxy IDN IPv6 Largefile libz NTLM PSL SSL threadsafe TLS-SRP UnixSockets
+```
+
+And now let's configure nginx. (thanks to https://blog.yaakov.online/http-3-with-nginx/ for this).  
+
+```
+    server {
+        listen       8443 ssl;
+        listen  [::]:8443 ssl;
+        http2 on;
+
+        listen       8443 quic;
+        listen  [::]:8443 quic;
+        http3 on;
+        add_header Alt-Svc 'h3=":8443"; ma=86400';
+
+        server_name  localhost;
+        ssl_certificate     localhost.chain.pem;
+        ssl_certificate_key localhost.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+        # ...
+```
+
+It should be enough :)  
+Both http2 and http3 are now available tru 8443 with tcp (http2) and udp (http3).  
+Run nginx from nginx-ffm directory : `NG_HOME=/xxx/nginx mvn exec:java`  
+The run curl, from nginx source directory (for easy access to ca.cert.pem).  
+
+```sh
+$CURL -v --cacert ca.cert.pem --http3-only https://localhost:8443/hello
+```
+
+Happy http3 java server with nginx :)
+
+```
+...
+* SSL certificate verified via OpenSSL.
+* Established connection to localhost (127.0.0.1 port 8443) from 127.0.0.1 port 55568
+* using HTTP/3
+* [HTTP/3] [0] OPENED stream for https://localhost:8443/hello
+* [HTTP/3] [0] [:method: GET]
+* [HTTP/3] [0] [:scheme: https]
+* [HTTP/3] [0] [:authority: localhost:8443]
+* [HTTP/3] [0] [:path: /hello]
+* [HTTP/3] [0] [user-agent: curl/8.18.0-DEV]
+* [HTTP/3] [0] [accept: */*]
+> GET /hello HTTP/3
+...
+```
+
+
+ 
+ 
 ## What next ?
 
 A lot of things to do !

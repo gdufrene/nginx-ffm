@@ -87,10 +87,10 @@ public interface NgBuffer extends NgGlobal {
 			return segment;
 		}
 
-		public void end(NgBuffer.NgChainLink chain) {
+		public void end() {
 			// chainBufHandle.set(segment, 0L, buf.getSegment());
 			try {
-				ngx_chain_end.invokeExact(chain.getSegment());
+				ngx_chain_end.invokeExact(segment);
 			} catch (Throwable e) {
 				throw new RuntimeException("Unable to set next to NULL", e);
 			}

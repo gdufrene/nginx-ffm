@@ -1,3 +1,4 @@
+package nginx.test;
 import org.junit.jupiter.api.Test;
 
 import nginx.core.NgArray;

@@ -15,6 +15,7 @@ import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import nginx.core.NgBuffer;
+import nginx.core.NgGlobal;
 import nginx.core.NgHttp;
 import nginx.core.NgPool;
 import poc.NgCore;
@@ -55,14 +56,26 @@ public class NgResponse implements HttpServletResponse {
 		
 		NgServletOutputStream() {
 			pool = getPool();
-			chain = NgBuffer.ngx_alloc_chain_link( pool ).orElseThrow();
+			chain = chainNext();
+			// chain = NgBuffer.ngx_alloc_chain_link( pool ).orElseThrow();
 			out = chain;
-			buf = NgBuffer.ngx_create_temp_buf( pool, 4096 ).orElseThrow();
-			chain.setBuffer( buf );
+			
 		}
 		
 		NgBuffer.NgChainLink chainNext() {
-			return out;
+			MemorySegment previousNext = MemorySegment.NULL;
+			if (chain != null) {
+				previousNext = (MemorySegment) NgBuffer.nextHandle.get( chain.getSegment(), 0L );
+				previousNext.reinterpret(8L);
+			}
+			NgBuffer.NgChainLink res = NgBuffer.ngx_alloc_chain_link( pool ).orElseThrow();
+			this.buf = NgBuffer.ngx_create_temp_buf( pool, 2048 ).orElseThrow();
+			res.setBuffer( this.buf );
+			if ( previousNext != MemorySegment.NULL ) {
+				System.out.println("Linking previous next to new chain segment " + res.getSegment());
+				NgBuffer.nextHandle.set( chain.getSegment(), 0L, res.getSegment() );
+			}
+			return res;
 		}
 		
 		@Override
@@ -80,22 +93,19 @@ public class NgResponse implements HttpServletResponse {
 		 */
 		public void write(byte[] b, int off, int len) throws IOException {
 			int todo = len;
-			long remaining = buf.remaining();
 			while ( todo > 0 ) {
-				System.out.println("todo=" + todo + ", remaining=" + remaining);
-				if ( remaining == 0 ) {
-					/*
-					buf = NgBuffer.ngx_create_temp_buf( pool, 4096 ).orElseThrow();
-					chain = chain.setBuffer( buf );
-					remaining = buf.remaining();
-					*/
-					// TODO: limit amount of data to buffer length right now. todo Next : allocate new chain link
-					return;
-				}
+				long remaining = buf.remaining();
 				int toWrite = (int) Math.min( todo, remaining );
 				buf.write( b, off, toWrite );
+				
 				off += toWrite;
 				todo -= toWrite;
+				remaining -= toWrite;
+
+				if ( remaining == 0 ) {
+					chain = chainNext();
+					remaining = buf.remaining();
+				}
 			}
 		}
 
@@ -103,15 +113,14 @@ public class NgResponse implements HttpServletResponse {
 		public void write(int b) throws IOException {
 			long remaining = buf.remaining();
 			if ( remaining == 0 ) {
-				buf = NgBuffer.ngx_create_temp_buf( pool, 4096 ).orElseThrow();
-				chain = chain.setBuffer( buf );
+				chain = chainNext();
 			}
 			buf = buf.write( b );
 		}
 		
 		@Override
-		public void flush() throws IOException {
-			chain.end( out );
+		public void close() throws IOException {
+			chain.end();
 		}
 
 	}
@@ -345,9 +354,9 @@ public class NgResponse implements HttpServletResponse {
 	public int flush() {
 		if ( _out != null ) {
 			try {
-				_out.flush();
+				_out.close();
 			} catch (IOException e) {
-				throw new RuntimeException("Unable to flush response output stream", e);
+				throw new RuntimeException("Unable to close response output stream", e);
 			}
 			return NgHttp.ngx_http_output_filter( request, _out.out.getSegment() );
 		} else {
