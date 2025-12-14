@@ -2,9 +2,8 @@ package nginx.core;
 
 import static java.lang.foreign.FunctionDescriptor.of;
 import static java.lang.foreign.FunctionDescriptor.ofVoid;
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.lang.foreign.ValueLayout.*;
+
 
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemoryLayout.PathElement;

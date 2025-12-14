@@ -1,18 +1,22 @@
 package poc;
 
-import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemoryLayout.PathElement;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
+import nginx.core.NgGlobal;
 import nginx.core.NgHttp;
-import nginx.core.NgString;
+import nginx.servlet.NgRequest;
 import nginx.servlet.NgResponse;
 
-public class NgRequestHandler {
+public class FfmRequestHandler {
 	
 	static final int 
 		NGX_OK       =  0,
@@ -22,16 +26,47 @@ public class NgRequestHandler {
 		PathElement.groupElement("signature")
 	);
 	
+	public static void init() throws Throwable {
+		FfmRequestHandler handler = new FfmRequestHandler();
+
+		MethodHandle upcallHandler = MethodHandles.lookup().bind(
+			handler,
+			"handleRequest",
+			MethodType.methodType(int.class, MemorySegment.class)
+		);
+
+		MemorySegment upcallFunc = NgGlobal.linker.upcallStub(
+			upcallHandler,
+			FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS.withTargetLayout(NgHttp.ngx_http_request_t) ),
+			// arena
+			Arena.global()
+		);
+		
+		VarHandle ffmUpcallHandle = ValueLayout.ADDRESS.varHandle();
+		ffmUpcallHandle.set(NgGlobal.SYMBOL_LOOKUP.findOrThrow("ngx_http_ffm_upcall").reinterpret(8), 0L, upcallFunc);
+	}
 	
+	
+	/*
+	final VarHandle uriHandle = NgHttp.ngx_http_request_t.varHandle(
+		PathElement.groupElement("uri")
+	);
+	*/
 	
 	public int handleRequest(MemorySegment reqPtr) {
 		
-		reqPtr = reqPtr.reinterpret(1328);
+		// reqPtr = reqPtr.reinterpret(1328);
 		// NgResponse response = new NgResponse(reqPtr);
 		
-		MemorySegment uriPtr = (MemorySegment) reqPtr.asSlice(824, NgString.ngx_str_t.byteSize());
+		NgRequest req = new NgRequest(reqPtr);
+		String uri = req.getRequestURI();
+		
+		String contentType = req.getContentType();
+		System.out.println("Request Content-Type: " + contentType);
+		
 		// System.out.println("Request URI address: " + uriPtr);
-		String uri = NgString.asString(uriPtr);
+		// String uri = NgString.asString(uriPtr2);
+		
 		System.out.println("Request URI: " + uri);
 		if ( !uri.startsWith("/hello") ) {
 			System.out.println("Declining request...");
@@ -41,7 +76,6 @@ public class NgRequestHandler {
 		NgResponse response = new NgResponse();
 		
 		response.request = reqPtr;
-		response.ngCore = this.ngCore;
 		
 		
 		// int http = (int) signatureHandle.get(reqPtr, 0L); // "HTTP" in hex
@@ -65,14 +99,14 @@ public class NgRequestHandler {
 			out.close();
 			
 			// System.out.println("Discard request...");
-			int rc = ngCore.ngx_http_discard_request_body(reqPtr);
+			int rc = NgHttp.ngx_http_discard_request_body(reqPtr);
 			if ( rc != NGX_OK ) {
 				System.out.println("ngx_http_discard_request_body() failed.");
 				return rc;
 			}
 			
 			// System.out.println("Sending response headers...");
-			rc = ngCore.httpSendHeader( reqPtr );
+			rc = NgHttp.ngx_http_send_header( reqPtr );
 			if ( rc != NGX_OK ) {
 				System.out.println("httpSendHeader() failed.");
 				return rc;
@@ -84,18 +118,11 @@ public class NgRequestHandler {
 			
 			return rc;
 
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			e.printStackTrace();
 			return 500;
 		}
 	}
-	
-	NgCore ngCore;
-	
-	public NgRequestHandler(NgCore ngCore) {
-		this.ngCore = ngCore;
-	}
-	
 	
 
 }

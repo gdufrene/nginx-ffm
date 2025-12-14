@@ -151,7 +151,7 @@ class NgBufferImpl implements NgBuffer {
 	@Override
 	public NgBuffer write(int b) {
 		MemorySegment last = (MemorySegment) lastHandle.get(segment, 0L);
-		last.reinterpret(1);
+		last = last.reinterpret(1);
 		last.asByteBuffer().put((byte) (b & 0xFF));
 		last.asSlice(1, 0);
 		lastHandle.set(segment, 0L, last);

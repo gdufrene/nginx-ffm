@@ -29,7 +29,7 @@ public interface NgString extends NgGlobal {
 		if ( seg.address() == NULL ) {
 			return "null";
 		}
-		seg.reinterpret(ngx_str_t.byteSize());
+		// seg.reinterpret(ngx_str_t.byteSize());
 		// MemUtils.dump(seg);
 		long len = (long) strLenHandle.get(seg, 0L);
 		MemorySegment dataSeg = (MemorySegment) strDataHandle.get(seg, 0L);

@@ -3,6 +3,12 @@ package nginx.servlet;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemoryLayout.PathElement;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -24,8 +30,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpUpgradeHandler;
 import jakarta.servlet.http.Part;
+import nginx.core.NgHash;
+import nginx.core.NgHttp;
+import nginx.core.NgString;
+import poc.MemUtils;
 
 public class NgRequest implements HttpServletRequest {
+	
+	private final MemorySegment req;
+	public NgRequest(MemorySegment req) {
+		this.req = req;
+	}
 
 	@Override
 	public Object getAttribute(String name) {
@@ -51,22 +66,54 @@ public class NgRequest implements HttpServletRequest {
 		
 	}
 
+	final static VarHandle vh_content_length_n = 
+		NgHttp.ngx_http_request_t.varHandle(
+			PathElement.groupElement("headers_in"),
+			PathElement.groupElement("content_length_n")
+		);
 	@Override
 	public int getContentLength() {
-		// TODO Auto-generated method stub
-		return 0;
+		return (int) vh_content_length_n.get(req, 0L);
 	}
 
 	@Override
 	public long getContentLengthLong() {
-		// TODO Auto-generated method stub
-		return 0;
+		return (long) vh_content_length_n.get(req, 0L);
 	}
 
+	final static VarHandle vh_content_type =
+			NgHttp.ngx_http_request_t.varHandle(
+				PathElement.groupElement("headers_in"),
+				PathElement.groupElement("content_type")
+			);
+	final long offset_key = 
+		NgHash.ngx_table_elt_t.byteOffset(
+			PathElement.groupElement("key")
+		);
+	final long offset_value = 
+			NgHash.ngx_table_elt_t.byteOffset(
+				PathElement.groupElement("value")
+			);
+	final long size_ngx_str_t = 
+			NgHash.ngx_table_elt_t.byteOffset(
+				PathElement.groupElement("value")
+			);
 	@Override
 	public String getContentType() {
-		// TODO Auto-generated method stub
-		return null;
+		
+		MemorySegment msContentType = (MemorySegment) vh_content_type.get(req, 0L);
+		if ( msContentType.address() == NgString.NULL ) {
+			return null;
+		}
+		MemorySegment msKey = msContentType.asSlice( offset_key, size_ngx_str_t );
+		System.out.println("Content-Type key segment:");
+		MemUtils.dump(msKey);
+		
+		MemorySegment msValue = msContentType.asSlice( offset_value, size_ngx_str_t );
+		System.out.println("Content-Type value segment:");
+		MemUtils.dump(msValue);
+		
+		return NgString.asString(msKey) + "/" + NgString.asString(msValue);
 	}
 
 	@Override
@@ -358,10 +405,14 @@ public class NgRequest implements HttpServletRequest {
 		return null;
 	}
 
+	private final static long offset_uri = 
+		NgHttp.ngx_http_request_t.byteOffset(
+			PathElement.groupElement("uri")
+		);
 	@Override
 	public String getRequestURI() {
-		// TODO Auto-generated method stub
-		return null;
+		MemorySegment ms = (MemorySegment) req.asSlice( offset_uri, NgString.ngx_str_t.byteSize() );
+		return NgString.asString(ms);
 	}
 
 	@Override

@@ -15,10 +15,9 @@ import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import nginx.core.NgBuffer;
-import nginx.core.NgGlobal;
+import nginx.core.NgCore;
 import nginx.core.NgHttp;
 import nginx.core.NgPool;
-import poc.NgCore;
 
 public class NgResponse implements HttpServletResponse {
 	
@@ -358,7 +357,11 @@ public class NgResponse implements HttpServletResponse {
 			} catch (IOException e) {
 				throw new RuntimeException("Unable to close response output stream", e);
 			}
-			return NgHttp.ngx_http_output_filter( request, _out.out.getSegment() );
+			try {
+				return NgHttp.ngx_http_output_filter( request, _out.out.getSegment() );
+			} catch (Throwable e) {
+				return 500;
+			}
 		} else {
 			// no output
 			return 200;
