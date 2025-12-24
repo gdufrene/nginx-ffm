@@ -10,8 +10,8 @@ import java.nio.file.Path;
 public interface NgGlobal {
 	
 	long NULL = 0L;
-
-	String NG_HOME = System.getenv().getOrDefault("NG_HOME", "nginx");
+	String NG_HOME_DEFAULT = "nginx";
+	String NG_HOME = System.getenv().getOrDefault("NG_HOME", NG_HOME_DEFAULT);
 	Linker linker = Linker.nativeLinker();
 	SymbolLookup SYMBOL_LOOKUP = SymbolLookup.libraryLookup( Path.of(NG_HOME, "objs", "nginx.so"), Arena.global() );
 	

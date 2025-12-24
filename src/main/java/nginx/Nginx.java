@@ -1,7 +1,5 @@
 package nginx;
 
-import java.lang.foreign.Arena;
-
 import nginx.core.NgCore;
 import nginx.core.NgCoreConf;
 import nginx.core.NgCycle;

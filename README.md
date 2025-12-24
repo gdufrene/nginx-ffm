@@ -298,20 +298,92 @@ A lot of things to do !
 Right now it's just a proof of concept and a learning use case for me.  
 Of course, only use this project as a pedagogical material, not as some trusted code :)
 
-[ ] More cleanup around binding to nginx native parts.  
+[] More cleanup around binding to nginx native parts.  
     Tried an "interface" approach to reference structs and operation available.  
     MethodHandles, VarHandles and downcalls done in some Impl classes.
     
-[ ] Not sure around Arena management.
+[] Not sure around Arena management.
     Global arena should be nice for global method handlers ?
     What about Memory allocation from java ?
     If this memory is freed with a nginx pool, should be ok ?
     What about implementing an Arena around nginx pool scopes ?
 
-[ ] Implement more servlet operations.
+[] How to Test ?
+   Find something better than a fail and learn process.  
+   Right now, my process is like "run server, run a request, crash and debug, try to fix, redo everything".  
+
+[] Implement more servlet operations.
     First basic OutputStream implementation done over a ngx_buf_t.  
     Efficient I/O based on nginx pools and buffers seems to be a good idea.  
     Specific Input and OutputStreams should be inspired by https://github.com/nginx/unit/blob/master/src/java/nxt_jni_InputStream.c
+
+
+## Clean up
+
+There is many different approach to map vars and methods to native code : 
+
+* interface with static methods  
+  seems to be a good fit for global vars and methods
+* interface and Impl class with segment reference  
+  for major structs ?
+* record that map vars  
+  for short-lived data or sub-struct elements ?
+
+## Arena management
+
+Most of memory is based on Arena.global because nginx manage all allocated memory himself.  
+The main memory life-cycle is based on a per-request pool of allocated objects freed after request handling.  
+
+## How to test native mappings
+
+* For struct / memory mapping:  
+It should be possible to save a MemorySegment from a real request, then, in a unit test, try to load that MemorySegment and do some tests with values extracted from a mapped object.
+
+* For request handling logic:  
+Maybe a lunch of the process, then execute some request with a client and check results tru the http response ?
+
+
+## More servlet operations.
+
+I target a subset of operation that allows me to demonstrate a spring application running with nginx as servlet engine.  
+
+From a minimalistic spring boot application, those request/response methods are called for a simple "hello world" rest controller.
+
+* For HttpServletRequest :
+
+```
+✅ RequestFacade.getAttribute
+RequestFacade.getCharacterEncoding
+✅ RequestFacade.getContentType
+RequestFacade.getContextPath
+✅ RequestFacade.getHeaders
+RequestFacade.getHttpServletMapping
+✅ RequestFacade.getMethod
+RequestFacade.getRemoteAddr
+✅ RequestFacade.getRequestURI
+✅ RequestFacade.getSession (mock: always return null)
+RequestFacade.getUserPrincipal
+RequestFacade.isAsyncSupported
+✅ RequestFacade.removeAttribute
+✅ RequestFacade.setAttribute
+```
+
+
+* For HttpServletResponse :
+
+```
+ResponseFacade.addHeader
+ResponseFacade.containsHeader
+ResponseFacade.getCharacterEncoding
+ResponseFacade.getContentType
+ResponseFacade.getHeader
+ResponseFacade.getHeaders
+ResponseFacade.getOutputStream
+ResponseFacade.getStatus
+ResponseFacade.setContentLengthLong
+```
+
+I checked current implemented methods inside NgRequest and NgResponse wrapper.
 
 
 ## Other ideas ?

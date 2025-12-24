@@ -240,6 +240,7 @@ public interface NgHttp extends NgGlobal {
 		System.out.println("NgHttp.ngx_http_request_body_t size: " + NgHttp.ngx_http_request_body_t.byteSize());
 		System.out.println();
 		System.out.println("NgHttp.headers_in.content_type offset: " + NgHttp.ngx_http_request_t.byteOffset(PathElement.groupElement("headers_in"), PathElement.groupElement("content_type")) );
+		System.out.println("NgHttp.method_name offset: " + NgHttp.ngx_http_request_t.byteOffset(PathElement.groupElement("method_name")) );
 	}
 	/* */
 }

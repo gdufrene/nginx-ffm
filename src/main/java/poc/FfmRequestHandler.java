@@ -10,6 +10,9 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
 
 import nginx.core.NgGlobal;
 import nginx.core.NgHttp;
@@ -72,6 +75,13 @@ public class FfmRequestHandler {
 			System.out.println("Declining request...");
 			return NGX_DECLINED;
 		}
+		
+		System.out.println("Method Name: " + req.getMethod());
+		
+		Enumeration<String> values = req.getHeaders("Host");
+		// transform Enumeration to List
+		List<String> hostHeaders = Collections.list(values);
+		System.out.println("headers (Host): " + hostHeaders);
 		
 		NgResponse response = new NgResponse();
 		

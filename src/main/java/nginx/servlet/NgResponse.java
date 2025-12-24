@@ -18,6 +18,7 @@ import nginx.core.NgBuffer;
 import nginx.core.NgCore;
 import nginx.core.NgHttp;
 import nginx.core.NgPool;
+import nginx.core.NgString;
 
 public class NgResponse implements HttpServletResponse {
 	
@@ -38,10 +39,17 @@ public class NgResponse implements HttpServletResponse {
 		return null;
 	}
 
+	private static long offsetContentType = NgHttp.ngx_http_request_t.byteOffset(
+		groupElement("headers_out"),
+		groupElement("content_type")
+	);
 	@Override
 	public String getContentType() {
-		// TODO Auto-generated method stub
-		return null;
+		MemorySegment ctSeg = request.asSlice(offsetContentType, NgString.ngx_str_t.byteSize());
+		if ( ctSeg == MemorySegment.NULL ) {
+			return null;
+		}
+		return NgString.asString( ctSeg );
 	}
 
 	

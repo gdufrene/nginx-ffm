@@ -3,15 +3,14 @@ package nginx.servlet;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemoryLayout.PathElement;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
@@ -32,20 +31,22 @@ import jakarta.servlet.http.HttpUpgradeHandler;
 import jakarta.servlet.http.Part;
 import nginx.core.NgHash;
 import nginx.core.NgHttp;
+import nginx.core.NgList;
 import nginx.core.NgString;
 import poc.MemUtils;
 
 public class NgRequest implements HttpServletRequest {
 	
 	private final MemorySegment req;
+	private final Map<String, Object> attributes = new HashMap<>();
+	
 	public NgRequest(MemorySegment req) {
 		this.req = req;
 	}
 
 	@Override
 	public Object getAttribute(String name) {
-		// TODO Auto-generated method stub
-		return null;
+		return attributes.get(name);
 	}
 
 	@Override
@@ -105,15 +106,17 @@ public class NgRequest implements HttpServletRequest {
 		if ( msContentType.address() == NgString.NULL ) {
 			return null;
 		}
+		/*
 		MemorySegment msKey = msContentType.asSlice( offset_key, size_ngx_str_t );
 		System.out.println("Content-Type key segment:");
 		MemUtils.dump(msKey);
+		*/
 		
 		MemorySegment msValue = msContentType.asSlice( offset_value, size_ngx_str_t );
-		System.out.println("Content-Type value segment:");
-		MemUtils.dump(msValue);
+//		System.out.println("Content-Type value segment:");
+//		MemUtils.dump(msValue);
 		
-		return NgString.asString(msKey) + "/" + NgString.asString(msValue);
+		return NgString.asString(msValue);
 	}
 
 	@Override
@@ -190,14 +193,12 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public void setAttribute(String name, Object o) {
-		// TODO Auto-generated method stub
-		
+		attributes.put(name, o);
 	}
 
 	@Override
 	public void removeAttribute(String name) {
-		// TODO Auto-generated method stub
-		
+		attributes.remove(name);
 	}
 
 	@Override
@@ -333,10 +334,47 @@ public class NgRequest implements HttpServletRequest {
 		return null;
 	}
 
+	static final long offsetHeaders = NgHttp.ngx_http_request_t.byteOffset(  
+			PathElement.groupElement("headers_in"),
+			PathElement.groupElement("headers")
+	); 
 	@Override
 	public Enumeration<String> getHeaders(String name) {
-		// TODO Auto-generated method stub
-		return null;
+		long hash = NgHash.ngx_hash_key_lc(name);
+		
+		MemorySegment headersList = req.asSlice(offsetHeaders, NgHttp.ngx_http_headers_in_t.byteSize());
+		Iterable<NgHash.NgxTableElt> iterable = NgList.iterator( 
+			(MemorySegment elt) -> new NgHash.NgxTableElt(elt), 
+			headersList
+		);
+		
+		final Iterator<NgHash.NgxTableElt> iterator = iterable.iterator();
+		
+		return new Enumeration<String>() {
+			NgHash.NgxTableElt next = findNext();
+			
+			private NgHash.NgxTableElt findNext() {
+				while( iterator.hasNext() ) {
+					NgHash.NgxTableElt candidate = iterator.next();
+					if ( candidate.getHash() == hash && candidate.getKey().equalsIgnoreCase(name) ) {
+						return candidate;
+					}
+				}
+				return null;
+			};
+			
+			@Override
+			public String nextElement() {
+				NgHash.NgxTableElt current = next;
+				next = findNext();
+				return current.getValue();
+			}
+			
+			@Override
+			public boolean hasMoreElements() {
+				return next != null;
+			}
+		};
 	}
 
 	@Override
@@ -351,10 +389,12 @@ public class NgRequest implements HttpServletRequest {
 		return 0;
 	}
 
+	final static long offsetMethod = NgHttp.ngx_http_request_t.byteOffset(  
+			PathElement.groupElement("method_name")
+	); 
 	@Override
 	public String getMethod() {
-		// TODO Auto-generated method stub
-		return null;
+		return NgString.asString( req.asSlice(offsetMethod, NgString.ngx_str_t.byteSize()) );
 	}
 
 	@Override
@@ -371,8 +411,8 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public String getContextPath() {
-		// TODO Auto-generated method stub
-		return null;
+		// FIXME Auto-generated method stub
+		return "";
 	}
 
 	@Override
