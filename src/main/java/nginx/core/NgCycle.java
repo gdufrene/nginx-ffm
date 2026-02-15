@@ -203,7 +203,7 @@ public interface NgCycle extends NgGlobal {
 	Optional<NgCycle> initCycle() throws Throwable;
 	void setPool(NgPool pool);
 
-	MemorySegment getModule(int i);
+	// MemorySegment getModule(int i);
 
 }
 
@@ -269,6 +269,7 @@ class NgCycleImpl implements NgCycle {
 		return Optional.of( new NgCycleImpl(ms.reinterpret(NgCycle.cycle_t.byteSize())) );
 	}
 	
+	/*
 	public MemorySegment getModule(int i) {
 		int modules_n = (int) cycle_t.varHandle(
 				PathElement.groupElement("modules_n")
@@ -282,5 +283,5 @@ class NgCycleImpl implements NgCycle {
 				.getAtIndex( ValueLayout.ADDRESS, i )
 				.reinterpret( NgModule.ngx_module_t.byteSize() );
 	}
-	
+	*/
 }

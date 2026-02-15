@@ -385,6 +385,18 @@ RequestFacade.getHttpServletMapping
 
 I checked current implemented methods inside NgRequest and NgResponse wrapper.
 
+## Use with spring-mvc
+
+Now that a minimal set of servlet operations are implemented, I should : 
+
+- add spring-mvc as a dependency,
+- bootstrap a small annotation based context with a controller,
+- initialize a servletDispatcher and delegates incoming nginx request to that dispatcher,
+
+Maybe I can try to dispatch nginx request log with slf4j to be able to configure level and pattern with simple configuration.
+
+Maybe I can try to implement a spring-boot autoconf that configure and start nginx and use it as web server rather than tomcat.f
+
 
 ## Other ideas ?
 

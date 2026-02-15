@@ -6,7 +6,7 @@ import nginx.core.NgCycle;
 import nginx.core.NgGlobal;
 import nginx.core.NgLog;
 import nginx.core.NgPool;
-import nginx.http.modules.NgHttpProxyModule;
+// import nginx.http.modules.NgHttpProxyModule;
 import poc.FfmRequestHandler;
 
 public class Nginx {
