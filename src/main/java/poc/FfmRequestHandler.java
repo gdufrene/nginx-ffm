@@ -15,7 +15,7 @@ import java.util.Enumeration;
 import java.util.List;
 
 import nginx.core.NgGlobal;
-import nginx.core.NgHttp;
+import nginx.http.NgHttpRequest;
 import nginx.servlet.NgRequest;
 import nginx.servlet.NgResponse;
 
@@ -25,7 +25,7 @@ public class FfmRequestHandler {
 		NGX_OK       =  0,
 		NGX_DECLINED = -5;
 	
-	static final VarHandle signatureHandle = NgHttp.ngx_http_request_t.varHandle(
+	static final VarHandle signatureHandle = NgHttpRequest.ngx_http_request_t.varHandle(
 		PathElement.groupElement("signature")
 	);
 	
@@ -40,7 +40,7 @@ public class FfmRequestHandler {
 
 		MemorySegment upcallFunc = NgGlobal.linker.upcallStub(
 			upcallHandler,
-			FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS.withTargetLayout(NgHttp.ngx_http_request_t) ),
+			FunctionDescriptor.of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS.withTargetLayout(NgHttpRequest.ngx_http_request_t) ),
 			// arena
 			Arena.global()
 		);
@@ -82,11 +82,10 @@ public class FfmRequestHandler {
 		// transform Enumeration to List
 		List<String> hostHeaders = Collections.list(values);
 		System.out.println("headers (Host): " + hostHeaders);
+
 		
 		NgResponse response = new NgResponse();
-		
 		response.request = reqPtr;
-		
 		
 		// int http = (int) signatureHandle.get(reqPtr, 0L); // "HTTP" in hex
 		// int http = 1;
@@ -94,6 +93,15 @@ public class FfmRequestHandler {
 		
 		response.setStatus(201);
 		response.setContentType("text/plain");
+		
+		System.out.println("Response content type: " + response.getContentType());
+		
+		response.addHeader("X-FFM", "Hello from Java FFM!");
+		System.out.println("Contains header (X-FFM): " + response.containsHeader("X-FFM"));
+		response.getHeaders("X-FFM").forEach( (v) -> System.out.println("Response headers X-FFM: " + v) );
+		System.out.println("Response first header X-FFM: " + response.getHeader("X-FFM") );
+		System.out.println("Response charset: " + response.getCharacterEncoding() );
+		System.out.println("Response status: " + response.getStatus() );
 		
 		try {
 
@@ -109,14 +117,14 @@ public class FfmRequestHandler {
 			out.close();
 			
 			// System.out.println("Discard request...");
-			int rc = NgHttp.ngx_http_discard_request_body(reqPtr);
+			int rc = NgHttpRequest.ngx_http_discard_request_body(reqPtr);
 			if ( rc != NGX_OK ) {
 				System.out.println("ngx_http_discard_request_body() failed.");
 				return rc;
 			}
 			
 			// System.out.println("Sending response headers...");
-			rc = NgHttp.ngx_http_send_header( reqPtr );
+			rc = NgHttpRequest.ngx_http_send_header( reqPtr );
 			if ( rc != NGX_OK ) {
 				System.out.println("httpSendHeader() failed.");
 				return rc;

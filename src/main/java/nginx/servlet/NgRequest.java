@@ -6,6 +6,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.foreign.MemoryLayout.PathElement;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -30,10 +31,9 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpUpgradeHandler;
 import jakarta.servlet.http.Part;
 import nginx.core.NgHash;
-import nginx.core.NgHttp;
 import nginx.core.NgList;
 import nginx.core.NgString;
-import poc.MemUtils;
+import nginx.http.NgHttpRequest;
 
 public class NgRequest implements HttpServletRequest {
 	
@@ -57,8 +57,8 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public String getCharacterEncoding() {
-		// TODO Auto-generated method stub
-		return null;
+		// FIXME get from headers_in.content_type ?
+		return StandardCharsets.UTF_8.name();
 	}
 
 	@Override
@@ -68,7 +68,7 @@ public class NgRequest implements HttpServletRequest {
 	}
 
 	final static VarHandle vh_content_length_n = 
-		NgHttp.ngx_http_request_t.varHandle(
+		NgHttpRequest.ngx_http_request_t.varHandle(
 			PathElement.groupElement("headers_in"),
 			PathElement.groupElement("content_length_n")
 		);
@@ -83,7 +83,7 @@ public class NgRequest implements HttpServletRequest {
 	}
 
 	final static VarHandle vh_content_type =
-			NgHttp.ngx_http_request_t.varHandle(
+			NgHttpRequest.ngx_http_request_t.varHandle(
 				PathElement.groupElement("headers_in"),
 				PathElement.groupElement("content_type")
 			);
@@ -181,8 +181,8 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public String getRemoteAddr() {
-		// TODO Auto-generated method stub
-		return null;
+		// FIXME mock to localhost interface
+		return "127.0.0.1";
 	}
 
 	@Override
@@ -276,7 +276,7 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public boolean isAsyncSupported() {
-		// TODO Auto-generated method stub
+		// FIXME mock to false
 		return false;
 	}
 
@@ -330,11 +330,10 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public String getHeader(String name) {
-		// TODO Auto-generated method stub
-		return null;
+		return getHeaders(name).nextElement();
 	}
 
-	static final long offsetHeaders = NgHttp.ngx_http_request_t.byteOffset(  
+	static final long offsetHeaders = NgHttpRequest.ngx_http_request_t.byteOffset(  
 			PathElement.groupElement("headers_in"),
 			PathElement.groupElement("headers")
 	); 
@@ -342,7 +341,7 @@ public class NgRequest implements HttpServletRequest {
 	public Enumeration<String> getHeaders(String name) {
 		long hash = NgHash.ngx_hash_key_lc(name);
 		
-		MemorySegment headersList = req.asSlice(offsetHeaders, NgHttp.ngx_http_headers_in_t.byteSize());
+		MemorySegment headersList = req.asSlice(offsetHeaders, NgHttpRequest.ngx_http_headers_in_t.byteSize());
 		Iterable<NgHash.NgxTableElt> iterable = NgList.iterator( 
 			(MemorySegment elt) -> new NgHash.NgxTableElt(elt), 
 			headersList
@@ -389,7 +388,7 @@ public class NgRequest implements HttpServletRequest {
 		return 0;
 	}
 
-	final static long offsetMethod = NgHttp.ngx_http_request_t.byteOffset(  
+	final static long offsetMethod = NgHttpRequest.ngx_http_request_t.byteOffset(  
 			PathElement.groupElement("method_name")
 	); 
 	@Override
@@ -411,7 +410,7 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public String getContextPath() {
-		// FIXME Auto-generated method stub
+		// FIXME currently we don't support servlet context, so just return empty string to indicate root context
 		return "";
 	}
 
@@ -435,7 +434,7 @@ public class NgRequest implements HttpServletRequest {
 
 	@Override
 	public Principal getUserPrincipal() {
-		// TODO Auto-generated method stub
+		// FIXME always return null (unauthenticated user)
 		return null;
 	}
 
@@ -446,7 +445,7 @@ public class NgRequest implements HttpServletRequest {
 	}
 
 	private final static long offset_uri = 
-		NgHttp.ngx_http_request_t.byteOffset(
+		NgHttpRequest.ngx_http_request_t.byteOffset(
 			PathElement.groupElement("uri")
 		);
 	@Override

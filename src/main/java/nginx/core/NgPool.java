@@ -20,16 +20,24 @@ public interface NgPool {
 
 	MemorySegment getSegment();
 	
+	MemorySegment ngx_palloc(long size); 
+	
 }
 
 class NgPoolImpl implements NgPool, NgGlobal {
 	
-	static MethodHandle ngx_create_pool;
+	static MethodHandle 
+		ngx_create_pool,
+		ngx_palloc;
 	
 	static {
 		ngx_create_pool = linker.downcallHandle(
 			SYMBOL_LOOKUP.find("ngx_create_pool").orElseThrow(),
 			of(ADDRESS, JAVA_LONG, ADDRESS)
+		);
+		ngx_palloc = linker.downcallHandle(
+			SYMBOL_LOOKUP.find("ngx_palloc").orElseThrow(),
+			of(ADDRESS, ADDRESS, JAVA_LONG)
 		);
 	}
 	
@@ -53,4 +61,12 @@ class NgPoolImpl implements NgPool, NgGlobal {
 		return pool;
 	}
 	
+	public MemorySegment ngx_palloc(long size) {
+		try {
+			MemorySegment mem = (MemorySegment) ngx_palloc.invokeExact(pool, size);
+			return mem.address() == NULL ? null : mem.reinterpret(size);
+		} catch (Throwable e) {
+			throw new RuntimeException("Unable to allocate memory from ngx_pool", e);
+		}
+	}
 }

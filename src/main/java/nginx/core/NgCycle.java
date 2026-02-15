@@ -41,7 +41,8 @@ public interface NgCycle extends NgGlobal {
 
 		
 	StructLayout cycle_t = MemoryLayout.structLayout(
-		ValueLayout.ADDRESS.withName("conf_ctx"),
+		ValueLayout.ADDRESS.withName("conf_ctx")
+			.withTargetLayout(ValueLayout.ADDRESS), // list of module config context pointers
 		
 		ValueLayout.ADDRESS.withName("pool"),
 		ValueLayout.ADDRESS.withName("log"),
@@ -97,7 +98,11 @@ public interface NgCycle extends NgGlobal {
 		NgString.ngx_str_t.withName("lock_file"),
 		NgString.ngx_str_t.withName("hostname")
 		
-	);
+	).withName("ngx_cycle_t");
+	
+	VarHandle 
+		conf_ctxHandle = cycle_t.varHandle(PathElement.groupElement("conf_ctx")),
+		modules_nHandle = cycle_t.varHandle(PathElement.groupElement("modules_n"));
 		
 	// dump cycle_t layout for debugging
 	static void debugDumpCycleLayout(MemorySegment cycleSegment) {
@@ -181,6 +186,8 @@ public interface NgCycle extends NgGlobal {
 			FunctionDescriptor.of( ValueLayout.ADDRESS, ValueLayout.ADDRESS )
 		);
 	
+
+	
 	static NgCycle create() throws Throwable {
 		MemorySegment segment = Arena.global().allocate( cycle_t.byteSize() );
 		if ( segment.address() == NULL ) {
@@ -195,6 +202,8 @@ public interface NgCycle extends NgGlobal {
 	void setLog(NgLog log);
 	Optional<NgCycle> initCycle() throws Throwable;
 	void setPool(NgPool pool);
+
+	MemorySegment getModule(int i);
 
 }
 
@@ -258,6 +267,20 @@ class NgCycleImpl implements NgCycle {
 			return Optional.empty();
 		}
 		return Optional.of( new NgCycleImpl(ms.reinterpret(NgCycle.cycle_t.byteSize())) );
+	}
+	
+	public MemorySegment getModule(int i) {
+		int modules_n = (int) cycle_t.varHandle(
+				PathElement.groupElement("modules_n")
+				).get( ngCycle, 0L );
+		if ( i < 0 || i >= modules_n ) {
+			return null;
+		}
+		return ((MemorySegment) cycle_t.varHandle(PathElement.groupElement("modules"))
+				.get( ngCycle, 0L ))
+				.reinterpret( ValueLayout.ADDRESS.byteSize() * modules_n )
+				.getAtIndex( ValueLayout.ADDRESS, i )
+				.reinterpret( NgModule.ngx_module_t.byteSize() );
 	}
 	
 }

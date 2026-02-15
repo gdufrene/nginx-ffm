@@ -6,8 +6,13 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.MemoryLayout.PathElement;
 import java.lang.invoke.VarHandle;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Iterator;
 import java.util.Locale;
 
 import jakarta.servlet.ServletOutputStream;
@@ -16,9 +21,11 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import nginx.core.NgBuffer;
 import nginx.core.NgCore;
-import nginx.core.NgHttp;
+import nginx.core.NgHash;
+import nginx.core.NgList;
 import nginx.core.NgPool;
 import nginx.core.NgString;
+import nginx.http.NgHttpRequest;
 
 public class NgResponse implements HttpServletResponse {
 	
@@ -35,11 +42,11 @@ public class NgResponse implements HttpServletResponse {
 
 	@Override
 	public String getCharacterEncoding() {
-		// TODO Auto-generated method stub
-		return null;
+		// FIXME get this from the request headers
+		return StandardCharsets.UTF_8.name();
 	}
 
-	private static long offsetContentType = NgHttp.ngx_http_request_t.byteOffset(
+	private static long offsetContentType = NgHttpRequest.ngx_http_request_t.byteOffset(
 		groupElement("headers_out"),
 		groupElement("content_type")
 	);
@@ -141,7 +148,7 @@ public class NgResponse implements HttpServletResponse {
 	}
 
 	
-	VarHandle vhPool = NgHttp.ngx_http_request_t.varHandle(
+	VarHandle vhPool = NgHttpRequest.ngx_http_request_t.varHandle(
 		groupElement("pool")
 	);
 	private NgPool getPool() {
@@ -161,7 +168,7 @@ public class NgResponse implements HttpServletResponse {
 		
 	}
 
-	private final static VarHandle contentLengthHandle = NgHttp.ngx_http_request_t.varHandle(
+	private final static VarHandle contentLengthHandle = NgHttpRequest.ngx_http_request_t.varHandle(
 		groupElement("headers_out"),
 		groupElement("content_length_n")
 	);
@@ -175,17 +182,17 @@ public class NgResponse implements HttpServletResponse {
 		contentLengthHandle.set(request, 0L, (long) len);
 	}
 
-	private final static VarHandle contentTypeLenHandle = NgHttp.ngx_http_request_t.varHandle(
+	private final static VarHandle contentTypeLenHandle = NgHttpRequest.ngx_http_request_t.varHandle(
 			groupElement("headers_out"),
 			groupElement("content_type"),
 			groupElement("len")
 		);
-	private final static VarHandle contentTypeDataHandle = NgHttp.ngx_http_request_t.varHandle(
+	private final static VarHandle contentTypeDataHandle = NgHttpRequest.ngx_http_request_t.varHandle(
 			groupElement("headers_out"),
 			groupElement("content_type"),
 			groupElement("data")
 		);
-	private final static VarHandle contentType_LenHandle = NgHttp.ngx_http_request_t.varHandle(
+	private final static VarHandle contentType_LenHandle = NgHttpRequest.ngx_http_request_t.varHandle(
 			groupElement("headers_out"),
 			groupElement("content_type_len")
 		);
@@ -255,8 +262,7 @@ public class NgResponse implements HttpServletResponse {
 
 	@Override
 	public boolean containsHeader(String name) {
-		// TODO Auto-generated method stub
-		return false;
+		return getHeader(name) != null;
 	}
 
 	@Override
@@ -309,7 +315,28 @@ public class NgResponse implements HttpServletResponse {
 
 	@Override
 	public void addHeader(String name, String value) {
-		// TODO Auto-generated method stub
+		
+		long nl = name.length();
+		long vl = value.length();
+		
+		// Get request pool and allocate memory for header name and value
+		MemorySegment kv = NgHttpRequest.allocOnPool(request, nl + vl);
+		kv.asSlice(0, nl).asByteBuffer().put( name.getBytes(StandardCharsets.ISO_8859_1) );
+		kv.asSlice(nl, vl).asByteBuffer().put( value.getBytes(StandardCharsets.ISO_8859_1) );
+		
+		MemorySegment headersList = request.asSlice(offsetHeaders, NgList.ngx_list_t.byteSize());
+		MemorySegment tableEltSeg = NgList.ngx_list_push(headersList).reinterpret( NgHash.ngx_table_elt_t.byteSize() );
+		
+		MemorySegment keySeg = tableEltSeg.asSlice(NgHash.offsetKey, NgString.ngx_str_t.byteSize());
+		NgString.strLenHandle.set(keySeg, 0L, nl);
+		NgString.strDataHandle.set(keySeg, 0L, kv);
+		
+		MemorySegment valSeg = tableEltSeg.asSlice(NgHash.offsetValue, NgString.ngx_str_t.byteSize());
+		NgString.strLenHandle.set(valSeg, 0L, vl);
+		NgString.strDataHandle.set(valSeg, 0L, kv.asSlice(nl));
+		
+		long hash = NgHash.ngx_hash_key_lc(name);
+		NgHash.vh_hash.set(tableEltSeg, 0L, hash);
 		
 	}
 
@@ -325,7 +352,7 @@ public class NgResponse implements HttpServletResponse {
 		
 	}
 
-	private final static VarHandle vhStatus = NgHttp.ngx_http_request_t.varHandle(
+	private final static VarHandle vhStatus = NgHttpRequest.ngx_http_request_t.varHandle(
 		groupElement("headers_out"),
 		groupElement("status")
 	);
@@ -336,20 +363,63 @@ public class NgResponse implements HttpServletResponse {
 
 	@Override
 	public int getStatus() {
-		// TODO Auto-generated method stub
-		return 0;
+		return (int) vhStatus.get(request, 0L);
 	}
 
+	// r->headers_out.headers is an array of ngx_table_elt_t, which has key and value as ngx_str_t. 
+	// We need to iterate over this array to find the header with the given name and return its value. 
 	@Override
 	public String getHeader(String name) {
-		// TODO Auto-generated method stub
-		return null;
+		return getHeadersEnumeration(name).nextElement();
 	}
 
+	static final long offsetHeaders = NgHttpRequest.ngx_http_request_t.byteOffset(  
+			PathElement.groupElement("headers_out"),
+			PathElement.groupElement("headers")
+	);
+	
+	private Enumeration<String> getHeadersEnumeration(String name) {
+		long hash = NgHash.ngx_hash_key_lc(name);
+		
+		MemorySegment headersList = request.asSlice(offsetHeaders, NgList.ngx_list_t.byteSize());
+		Iterable<NgHash.NgxTableElt> iterable = NgList.iterator( 
+			(MemorySegment elt) -> new NgHash.NgxTableElt(elt), 
+			headersList
+		);
+		
+		final Iterator<NgHash.NgxTableElt> iterator = iterable.iterator();
+		
+		return new Enumeration<String>() {
+			NgHash.NgxTableElt next = findNext();
+			
+			private NgHash.NgxTableElt findNext() {
+				while( iterator.hasNext() ) {
+					NgHash.NgxTableElt candidate = iterator.next();
+					if ( candidate.getHash() == hash && candidate.getKey().equalsIgnoreCase(name) ) {
+						return candidate;
+					}
+				}
+				return null;
+			};
+			
+			@Override
+			public String nextElement() {
+				NgHash.NgxTableElt current = next;
+				next = findNext();
+				return current.getValue();
+			}
+			
+			@Override
+			public boolean hasMoreElements() {
+				return next != null;
+			}
+		};
+	}
+	
 	@Override
 	public Collection<String> getHeaders(String name) {
-		// TODO Auto-generated method stub
-		return null;
+		var e = getHeadersEnumeration(name);		
+		return Collections.list(e);
 	}
 
 	@Override
@@ -366,7 +436,7 @@ public class NgResponse implements HttpServletResponse {
 				throw new RuntimeException("Unable to close response output stream", e);
 			}
 			try {
-				return NgHttp.ngx_http_output_filter( request, _out.out.getSegment() );
+				return NgHttpRequest.ngx_http_output_filter( request, _out.out.getSegment() );
 			} catch (Throwable e) {
 				return 500;
 			}

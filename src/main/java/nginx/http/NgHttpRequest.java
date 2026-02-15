@@ -1,4 +1,4 @@
-package nginx.core;
+package nginx.http;
 
 import static java.lang.foreign.FunctionDescriptor.of;
 import static java.lang.foreign.MemoryLayout.paddingLayout;
@@ -14,15 +14,21 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.StructLayout;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.VarHandle;
 
-public interface NgHttp extends NgGlobal {
+import nginx.core.NgGlobal;
+import nginx.core.NgHash;
+import nginx.core.NgList;
+import nginx.core.NgPool;
+import nginx.core.NgString;
+
+public interface NgHttpRequest extends NgGlobal {
 	
 	int NGX_HTTP_LC_HEADER_LEN = 32;
 	
 	StructLayout ngx_http_headers_out_t = structLayout(
-			//headers,
-			//trailers,
-			paddingLayout(112), // padding ...
+			NgList.ngx_list_t.withName("headers"),
+			NgList.ngx_list_t.withName("trailers"),
 			JAVA_INT.withName("status"),
 			paddingLayout(140), // padding ...
 			JAVA_LONG.withName("content_type_len"),
@@ -210,12 +216,16 @@ public interface NgHttp extends NgGlobal {
 			
 		).withName("ngx_http_request_t");
 	
-	MethodHandle ngx_http_output_filter = NgGlobal.downcallTo( 
-			"ngx_http_output_filter", of(JAVA_INT, ADDRESS, ADDRESS));
-	MethodHandle ngx_http_send_header = NgGlobal.downcallTo( 
-			"ngx_http_send_header", of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS ));
-	MethodHandle ngx_http_discard_request_body = NgGlobal.downcallTo( 
-			"ngx_http_discard_request_body", of( JAVA_INT, ADDRESS ));
+	MethodHandle 
+		  ngx_http_output_filter = NgGlobal.downcallTo("ngx_http_output_filter", of(JAVA_INT, ADDRESS, ADDRESS))
+		, ngx_http_send_header = NgGlobal.downcallTo("ngx_http_send_header", of( ValueLayout.JAVA_INT, ValueLayout.ADDRESS ))
+		, ngx_http_discard_request_body = NgGlobal.downcallTo("ngx_http_discard_request_body", of( JAVA_INT, ADDRESS ))
+		;
+	
+	VarHandle
+		vhPool = ngx_http_request_t.varHandle(PathElement.groupElement("pool"));
+	
+	
 
 	static int ngx_http_output_filter(MemorySegment request, MemorySegment segment) throws Throwable {
 		return (int) ngx_http_output_filter.invokeExact(request, segment);
@@ -229,18 +239,24 @@ public interface NgHttp extends NgGlobal {
 		return (int) ngx_http_discard_request_body.invokeExact(segment);
 	}
 	
+	static MemorySegment allocOnPool(MemorySegment request, long size) {
+		NgPool pool = NgPool.fromSegment( (MemorySegment) vhPool.get(request, 0L) );
+		return pool.ngx_palloc(size);
+	}
+	
 	public MemorySegment getMemorySegment();
 
 
 	/* */
 	public static void main(String[] args) {
-		System.out.println("NgHttp.ngx_http_request_t size: " + NgHttp.ngx_http_request_t.byteSize());
-		System.out.println("NgHttp.ngx_http_headers_in_t size: " + NgHttp.ngx_http_headers_in_t.byteSize());
-		System.out.println("NgHttp.ngx_http_headers_out_t size: " + NgHttp.ngx_http_headers_out_t.byteSize());
-		System.out.println("NgHttp.ngx_http_request_body_t size: " + NgHttp.ngx_http_request_body_t.byteSize());
+		System.out.println("NgHttp.ngx_http_request_t size: " + NgHttpRequest.ngx_http_request_t.byteSize());
+		System.out.println("NgHttp.ngx_http_headers_in_t size: " + NgHttpRequest.ngx_http_headers_in_t.byteSize());
+		System.out.println("NgHttp.ngx_http_headers_out_t size: " + NgHttpRequest.ngx_http_headers_out_t.byteSize());
+		System.out.println("                   ngx_list_t size: " + NgList.ngx_list_t.byteSize());
+		System.out.println("NgHttp.ngx_http_request_body_t size: " + NgHttpRequest.ngx_http_request_body_t.byteSize());
 		System.out.println();
-		System.out.println("NgHttp.headers_in.content_type offset: " + NgHttp.ngx_http_request_t.byteOffset(PathElement.groupElement("headers_in"), PathElement.groupElement("content_type")) );
-		System.out.println("NgHttp.method_name offset: " + NgHttp.ngx_http_request_t.byteOffset(PathElement.groupElement("method_name")) );
+		System.out.println("NgHttp.headers_in.content_type offset: " + NgHttpRequest.ngx_http_request_t.byteOffset(PathElement.groupElement("headers_in"), PathElement.groupElement("content_type")) );
+		System.out.println("NgHttp.method_name offset: " + NgHttpRequest.ngx_http_request_t.byteOffset(PathElement.groupElement("method_name")) );
 	}
 	/* */
 }

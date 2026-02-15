@@ -264,6 +264,14 @@ public interface NgCore extends NgGlobal {
 				.reinterpret(8)
 				.set( ValueLayout.ADDRESS, 0L, cycle.getSegment() );
 		}
+		
+		static NgCycle currentCycle() {
+			MemorySegment cyclePtr = SYMBOL_LOOKUP.findOrThrow("ngx_cycle")
+				.reinterpret(8L)
+				.get( ValueLayout.ADDRESS, 0L )
+				.reinterpret( NgCycle.cycle_t.byteSize() );
+			return new NgCycleImpl( cyclePtr );
+		}
 
 		static void initProcessIds() {
 			ProcessHandle current = ProcessHandle.current();

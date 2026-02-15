@@ -28,9 +28,11 @@ public interface NgArray {
 	static NgArray ngx_array_create(NgPool pool, int n, long size) {
 		return new NgArrayImpl(pool, n, size);
 	}
+	
+	MemorySegment getSegment();
 	void ngx_array_destroy();
-	void ngx_array_push();
-	void ngx_array_push_n(int n);
+	MemorySegment ngx_array_push();
+	MemorySegment ngx_array_push_n(int n);
 	
 	
 	VarHandle eltsHandle = ngx_array_t.varHandle(
@@ -52,6 +54,10 @@ public interface NgArray {
 	VarHandle poolHandle = ngx_array_t.varHandle(
 		PathElement.groupElement("pool")
 	);
+
+	static NgArray fromSegment(MemorySegment args) {
+		return new NgArrayImpl(args);
+	}
 	
 }
 
@@ -76,17 +82,21 @@ class NgArrayImpl implements NgArray, NgGlobal {
 		
 		ngx_array_push = linker.downcallHandle(
 			SYMBOL_LOOKUP.find("ngx_array_push").orElseThrow(),
-			ofVoid(ADDRESS)
+			of(ADDRESS, ADDRESS)
 		);
 		
 		ngx_array_push_n = linker.downcallHandle(
 			SYMBOL_LOOKUP.find("ngx_array_push_n").orElseThrow(),
-			ofVoid(ADDRESS, JAVA_INT)
+			of(ADDRESS, ADDRESS, JAVA_INT)
 		);
 	}
 	
 	MemorySegment array;
 	NgPool pool;
+	
+	public NgArrayImpl(MemorySegment array) {
+		this.array = array;
+	}
 
 	public NgArrayImpl(NgPool pool, int n, long size) {
 		try {
@@ -106,22 +116,25 @@ class NgArrayImpl implements NgArray, NgGlobal {
 	}
 
 	@Override
-	public void ngx_array_push() {
+	public MemorySegment ngx_array_push() {
 		try {
-			ngx_array_push.invokeExact(array);
+			return (MemorySegment) ngx_array_push.invokeExact(array);
 		} catch (Throwable e) {
 			throw new RuntimeException("Unable to push ngx_array", e);
 		}
 	}
 
 	@Override
-	public void ngx_array_push_n(int n) {
+	public MemorySegment ngx_array_push_n(int n) {
 		try {
-			ngx_array_push_n.invokeExact(array, n);
+			return (MemorySegment) ngx_array_push_n.invokeExact(array, n);
 		} catch (Throwable e) {
 			throw new RuntimeException("Unable to push ngx_array_n", e);
 		}
 	}
-	
+
+	public MemorySegment getSegment() {
+		return array;
+	}
 }
 

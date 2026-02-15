@@ -31,11 +31,14 @@ public interface NgHash extends NgGlobal {
 			ADDRESS.withName("next")
 		).withName("ngx_table_elt_t");
 	
-	public static VarHandle
+	VarHandle
 		vh_hash = ngx_table_elt_t.varHandle(PathElement.groupElement("hash")),
 		// vh_key = ngx_table_elt_t.varHandle(PathElement.groupElement("key")),
 		// vh_value = ngx_table_elt_t.varHandle(PathElement.groupElement("value")),
 		vh_next = ngx_table_elt_t.varHandle(PathElement.groupElement("next"));
+	
+	long offsetKey = ngx_table_elt_t.byteOffset(PathElement.groupElement("key"));
+	long offsetValue = ngx_table_elt_t.byteOffset(PathElement.groupElement("value"));
 	
 	record NgxTableElt(MemorySegment segment) {
 		public long getHash() {
@@ -57,6 +60,7 @@ public interface NgHash extends NgGlobal {
 			return new NgxTableElt( nextSeg.reinterpret(ngx_table_elt_t.byteSize()) );
 		}
 	}
+	
 	
 	final MethodHandle
 		ngx_hash_key = linker.downcallHandle(
@@ -99,6 +103,18 @@ public interface NgHash extends NgGlobal {
 			throw new RuntimeException("Unable to call ngx_hash_key_lc", e);
 		}
 	}
+	
 
+
+	/*
+typedef struct {
+    ngx_hash_elt_t  **buckets;
+    ngx_uint_t        size;
+} ngx_hash_t;
+	 */
+	StructLayout ngx_hash_t = structLayout(
+			ADDRESS.withName("buckets"),
+			JAVA_LONG.withName("size")
+		).withName("ngx_hash_t");
 
 }

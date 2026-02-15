@@ -19,14 +19,14 @@ import java.util.function.Function;
 
 import poc.MemUtils;
 
-public interface NgList {
+public interface NgList extends NgGlobal {
 	
 	StructLayout ngx_part_t = structLayout(
 			ADDRESS.withName("elts"),
 			JAVA_INT.withName("nelts"),
 			paddingLayout(4),
 			ADDRESS.withName("next")
-		);
+		).withName("ngx_part_t");
 	
 	StructLayout ngx_list_t = structLayout(
 			ADDRESS.withName("last"),
@@ -35,7 +35,11 @@ public interface NgList {
 			JAVA_INT.withName("nalloc"),
 			paddingLayout(4),
 			ADDRESS.withName("pool")
-		);
+		).withName("ngx_list_t");
+	
+	final MethodHandle
+		ngx_list_push = NgGlobal.downcallTo("ngx_list_push", of(ADDRESS, ADDRESS));
+		
 	
 	/*
 	 *  (comments from nginx source code)
@@ -113,6 +117,14 @@ public interface NgList {
 				return mapper.apply( element );
 			}
 		};
+	}
+	
+	static MemorySegment ngx_list_push(MemorySegment listSeg) {
+		try {
+			return (MemorySegment) ngx_list_push.invokeExact( listSeg );
+		} catch (Throwable e) {
+			throw new RuntimeException("Unable to push to ngx_list", e);
+		}
 	}
 
 }

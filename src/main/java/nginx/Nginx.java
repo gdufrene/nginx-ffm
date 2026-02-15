@@ -6,6 +6,7 @@ import nginx.core.NgCycle;
 import nginx.core.NgGlobal;
 import nginx.core.NgLog;
 import nginx.core.NgPool;
+import nginx.http.modules.NgHttpProxyModule;
 import poc.FfmRequestHandler;
 
 public class Nginx {
@@ -146,6 +147,10 @@ public class Nginx {
 			// process cycle will not return
 			// ngCore.masterProcessCycle(cycle);
 			NgCore.singleProcessCycle(cycle);
+			
+			// NgHttpProxyModule.addProxyPass("http://localhost:8080/api");
+			
+			
 			
 			System.out.println("Nginx masterProcessCycle returned ?");
 		} catch (Throwable e) {

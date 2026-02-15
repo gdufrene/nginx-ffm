@@ -353,17 +353,17 @@ From a minimalistic spring boot application, those request/response methods are 
 
 ```
 ✅ RequestFacade.getAttribute
-RequestFacade.getCharacterEncoding
+✅ RequestFacade.getCharacterEncoding (mock to UTF-8)
 ✅ RequestFacade.getContentType
-RequestFacade.getContextPath
+✅ RequestFacade.getContextPath
 ✅ RequestFacade.getHeaders
 RequestFacade.getHttpServletMapping
 ✅ RequestFacade.getMethod
-RequestFacade.getRemoteAddr
+✅ RequestFacade.getRemoteAddr (mock to "127.0.0.1")
 ✅ RequestFacade.getRequestURI
 ✅ RequestFacade.getSession (mock: always return null)
-RequestFacade.getUserPrincipal
-RequestFacade.isAsyncSupported
+✅ RequestFacade.getUserPrincipal (mock: null)
+✅ RequestFacade.isAsyncSupported (mock to false)
 ✅ RequestFacade.removeAttribute
 ✅ RequestFacade.setAttribute
 ```
@@ -372,15 +372,15 @@ RequestFacade.isAsyncSupported
 * For HttpServletResponse :
 
 ```
-ResponseFacade.addHeader
-ResponseFacade.containsHeader
-ResponseFacade.getCharacterEncoding
-ResponseFacade.getContentType
-ResponseFacade.getHeader
-ResponseFacade.getHeaders
-ResponseFacade.getOutputStream
-ResponseFacade.getStatus
-ResponseFacade.setContentLengthLong
+✅ ResponseFacade.addHeader
+✅ ResponseFacade.containsHeader
+✅ ResponseFacade.getCharacterEncoding (mock to UTF-8)
+✅ ResponseFacade.getContentType
+✅ ResponseFacade.getHeader
+✅ ResponseFacade.getHeaders
+✅ ResponseFacade.getOutputStream
+✅ ResponseFacade.getStatus
+✅ ResponseFacade.setContentLengthLong
 ```
 
 I checked current implemented methods inside NgRequest and NgResponse wrapper.
