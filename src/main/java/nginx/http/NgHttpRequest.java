@@ -15,6 +15,9 @@ import java.lang.foreign.StructLayout;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
+import java.rmi.UnexpectedException;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import nginx.core.NgGlobal;
 import nginx.core.NgHash;
@@ -29,17 +32,23 @@ public interface NgHttpRequest extends NgGlobal {
 	StructLayout ngx_http_headers_out_t = structLayout(
 			NgList.ngx_list_t.withName("headers"),
 			NgList.ngx_list_t.withName("trailers"),
+			
 			JAVA_INT.withName("status"),
-			paddingLayout(140), // padding ...
+			paddingLayout(4),
+			NgString.ngx_str_t.withName("status_line"),
+			
+			paddingLayout(120), // padding ...
+			
 			JAVA_LONG.withName("content_type_len"),
-			structLayout(
-				JAVA_LONG.withName("len"),
-				ADDRESS.withName("data")
-			).withName("content_type"),
-			// paddingLayout(4), // padding to align next LONG
+			NgString.ngx_str_t.withName("content_type"),
+			NgString.ngx_str_t.withName("charset"),
+			ADDRESS.withName("content_type_lowcase"),
+			JAVA_LONG.withName("content_type_hash"),
+			
 			JAVA_LONG.withName("content_length_n"),
-			// ... (other fields would be defined here)
-			paddingLayout(56) // padding to match size
+			JAVA_LONG.withName("content_offset"),
+			JAVA_LONG.withName("date_time"),
+			JAVA_LONG.withName("last_modified_time")
 		).withName("ngx_http_headers_out_t");
 	
 	StructLayout ngx_http_headers_in_t = structLayout(
@@ -183,7 +192,7 @@ public interface NgHttpRequest extends NgGlobal {
 			JAVA_INT.withName("port"),
 			
 			/* padding for flags ... */
-			paddingLayout(40),
+			paddingLayout(32),
 			
 			JAVA_INT.withName("state"),
 			
@@ -249,13 +258,25 @@ public interface NgHttpRequest extends NgGlobal {
 
 	/* */
 	public static void main(String[] args) {
-		System.out.println("NgHttp.ngx_http_request_t size: " + NgHttpRequest.ngx_http_request_t.byteSize());
-		System.out.println("NgHttp.ngx_http_headers_in_t size: " + NgHttpRequest.ngx_http_headers_in_t.byteSize());
-		System.out.println("NgHttp.ngx_http_headers_out_t size: " + NgHttpRequest.ngx_http_headers_out_t.byteSize());
-		System.out.println("                   ngx_list_t size: " + NgList.ngx_list_t.byteSize());
-		System.out.println("NgHttp.ngx_http_request_body_t size: " + NgHttpRequest.ngx_http_request_body_t.byteSize());
+		BiConsumer<StructLayout, Long> sizing = (layout, expected) -> {
+				long size = layout.byteSize();
+				System.out.format("%s size(%s) = %d\n",
+						size == expected ? "✅" : "❌",
+						layout.name().get(), 
+						size
+				);
+		};
+		
+		sizing.accept(NgHttpRequest.ngx_http_request_t, 1328L);
+		sizing.accept(NgHttpRequest.ngx_http_headers_in_t, 312L);
+		sizing.accept(NgHttpRequest.ngx_http_headers_out_t, 344L);
+		sizing.accept(NgHttpRequest.ngx_http_request_body_t, 80L);
+		
+		sizing.accept(NgList.ngx_list_t, 56L);
+
 		System.out.println();
 		System.out.println("NgHttp.headers_in.content_type offset: " + NgHttpRequest.ngx_http_request_t.byteOffset(PathElement.groupElement("headers_in"), PathElement.groupElement("content_type")) );
+		System.out.println("offset(ngx_http_request_t.headers_out.content_length_n) : " + NgHttpRequest.ngx_http_request_t.byteOffset(PathElement.groupElement("headers_out"), PathElement.groupElement("content_length_n")) );
 		System.out.println("NgHttp.method_name offset: " + NgHttpRequest.ngx_http_request_t.byteOffset(PathElement.groupElement("method_name")) );
 	}
 	/* */

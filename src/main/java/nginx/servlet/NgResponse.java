@@ -15,6 +15,8 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Locale;
 
+import org.springframework.util.StringUtils;
+
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
@@ -42,8 +44,13 @@ public class NgResponse implements HttpServletResponse {
 
 	@Override
 	public String getCharacterEncoding() {
-		// FIXME get this from the request headers
-		return StandardCharsets.UTF_8.name();
+		long len = (long) charsetTypeLenHandle.get(request, 0L);
+		if ( len == 0 ) return null;
+		MemorySegment dataSeg = (MemorySegment) charsetTypeDataHandle.get(request, 0L);
+		dataSeg = dataSeg.reinterpret(len);
+		byte[] bytes = new byte[(int) len];
+		dataSeg.asByteBuffer().get(bytes);
+		return new String(bytes, StandardCharsets.ISO_8859_1);
 	}
 
 	private static long offsetContentType = NgHttpRequest.ngx_http_request_t.byteOffset(
@@ -161,11 +168,31 @@ public class NgResponse implements HttpServletResponse {
 	public PrintWriter getWriter() throws IOException {
 		return new PrintWriter(getOutputStream());
 	}
+	
+	private final static VarHandle 
+	    charsetTypeLenHandle = NgHttpRequest.ngx_http_request_t.varHandle(
+			groupElement("headers_out"),
+			groupElement("charset"),
+			groupElement("len")
+		),
+	    charsetTypeDataHandle = NgHttpRequest.ngx_http_request_t.varHandle(
+			groupElement("headers_out"),
+			groupElement("charset"),
+			groupElement("data")
+		);
 
 	@Override
 	public void setCharacterEncoding(String encoding) {
-		// TODO Auto-generated method stub
+		System.out.println("setCharacterEncoding called with encoding: " + encoding);
 		
+		if ( encoding != null && encoding.length() > 0 ) {
+			byte[] encBytes = encoding.getBytes(StandardCharsets.ISO_8859_1);
+			MemorySegment seg = NgHttpRequest.allocOnPool(request, encBytes.length);
+			seg.asByteBuffer().put( encBytes );
+			
+			charsetTypeDataHandle.set(request, 0L, seg);
+			charsetTypeLenHandle.set(request, 0L, encBytes.length);
+		}
 	}
 
 	private final static VarHandle contentLengthHandle = NgHttpRequest.ngx_http_request_t.varHandle(
@@ -174,7 +201,7 @@ public class NgResponse implements HttpServletResponse {
 	);
 	@Override
 	public void setContentLength(int len) {
-		contentLengthHandle.set(request, 0L, (long) len);
+		setContentLengthLong(len);
 	}
 
 	@Override
@@ -198,10 +225,39 @@ public class NgResponse implements HttpServletResponse {
 		);
 	@Override
 	public void setContentType(String type) {
-		Arena arena = Arena.ofAuto();
-		MemorySegment seg = arena.allocateFrom(type);
-		contentTypeDataHandle.set(request, 0L, seg);
-		long len = seg.byteSize()-1;
+		
+		// type = "text/plain";
+		
+		long len = 0L;
+		
+		if ( type != null && type.length() > 0 ) {
+			
+			int i = type.indexOf(';');
+			if ( i >= 0 ) {
+				// log("Content-Type parameter ignored, only media type is set: " + type);
+				
+				int j = type.indexOf("charset=", i);
+				// String params = type.substring(i).trim();
+				if(j >= 0) {
+					String charset = type.substring(j+8).trim();
+					log("Setting character encoding from Content-Type parameter: " + charset);
+					setCharacterEncoding(charset);
+				}
+				
+				type = type.substring(0, i);
+			}
+			
+			// FIXME: replace with a pool allocation from nginx request pool
+			byte[] typeBytes = type.getBytes(StandardCharsets.ISO_8859_1);
+			len = typeBytes.length;
+			MemorySegment seg = NgHttpRequest.allocOnPool(request, typeBytes.length);
+			seg.asByteBuffer().put( typeBytes );
+			
+			//Arena arena = Arena.global();
+			//MemorySegment seg = arena.allocateFrom(type);
+			contentTypeDataHandle.set(request, 0L, seg);
+		}
+		
 		contentTypeLenHandle.set(request, 0L, len);
 		contentType_LenHandle.set(request, 0L, len);
 	}
@@ -209,55 +265,58 @@ public class NgResponse implements HttpServletResponse {
 	@Override
 	public void setBufferSize(int size) {
 		// TODO Auto-generated method stub
-		
+		log("setBufferSize called with size: " + size);
 	}
 
 	@Override
 	public int getBufferSize() {
 		// TODO Auto-generated method stub
+		log("getBufferSize called");
 		return 0;
 	}
 
 	@Override
 	public void flushBuffer() throws IOException {
 		// TODO Auto-generated method stub
-		
+		log("flushBuffer called");
 	}
 
 	@Override
 	public void resetBuffer() {
 		// TODO Auto-generated method stub
-		
+		log("resetBuffer called");
 	}
 
 	@Override
 	public boolean isCommitted() {
 		// TODO Auto-generated method stub
+		log("isCommitted called");
 		return false;
 	}
 
 	@Override
 	public void reset() {
 		// TODO Auto-generated method stub
-		
+		log("reset called");
 	}
 
 	@Override
 	public void setLocale(Locale loc) {
 		// TODO Auto-generated method stub
-		
+		log("setLocale called with locale: " + loc);
 	}
 
 	@Override
 	public Locale getLocale() {
 		// TODO Auto-generated method stub
+		log("getLocale called");
 		return null;
 	}
 
 	@Override
 	public void addCookie(Cookie cookie) {
 		// TODO Auto-generated method stub
-		
+		log("addCookie called with cookie: " + cookie);
 	}
 
 	@Override
@@ -268,56 +327,84 @@ public class NgResponse implements HttpServletResponse {
 	@Override
 	public String encodeURL(String url) {
 		// TODO Auto-generated method stub
+		log("encodeURL called with url: " + url);
 		return null;
 	}
 
 	@Override
 	public String encodeRedirectURL(String url) {
 		// TODO Auto-generated method stub
+		log("encodeRedirectURL called with url: " + url);
 		return null;
 	}
 
 	@Override
 	public void sendError(int sc, String msg) throws IOException {
 		// TODO Auto-generated method stub
-		
+		log("sendError called with status code: " + sc + " and message: " + msg);
+		setStatus(sc);
+		// flush();
 	}
 
 	@Override
 	public void sendError(int sc) throws IOException {
 		// TODO Auto-generated method stub
-		
+		log("sendError called with status code: " + sc);
+		setStatus(sc);
+		// flush();
 	}
 
 	@Override
 	public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
 		// TODO Auto-generated method stub
-		
+		log("sendRedirect called with location: " + location + ", status code: " + sc + " and clearBuffer: " + clearBuffer);
 	}
 
 	@Override
 	public void setDateHeader(String name, long date) {
 		// TODO Auto-generated method stub
-		
+		log("setDateHeader called with name: " + name + " and date: " + date);
 	}
 
 	@Override
 	public void addDateHeader(String name, long date) {
 		// TODO Auto-generated method stub
-		
+		log("addDateHeader called with name: " + name + " and date: " + date);
 	}
 
 	@Override
 	public void setHeader(String name, String value) {
 		// TODO Auto-generated method stub
+		log("setHeader called with name: " + name + " and value: " + value);
 		
+		if (name.equalsIgnoreCase("Content-Type")) {
+			setContentType(value);
+			return;
+		}
+		
+		if (name.equalsIgnoreCase("Content-Length")) {
+			try {
+				setContentLengthLong(Long.parseLong(value));
+			} catch (NumberFormatException e) {
+				log("Invalid Content-Length value: " + value);
+			}
+			return;
+		}
+		
+		addHeader(name, value);
 	}
 
 	@Override
 	public void addHeader(String name, String value) {
 		
 		long nl = name.length();
-		long vl = value.length();
+		long vl = value == null ? 0 : value.length();
+		
+		if ( vl == 0 ) {
+			// FIXME: delete header if value is empty
+			log("Empty header value for name: " + name + ", header will not be added");
+			return;
+		}
 		
 		// Get request pool and allocate memory for header name and value
 		MemorySegment kv = NgHttpRequest.allocOnPool(request, nl + vl);
@@ -343,13 +430,13 @@ public class NgResponse implements HttpServletResponse {
 	@Override
 	public void setIntHeader(String name, int value) {
 		// TODO Auto-generated method stub
-		
+		log("setIntHeader called with name: " + name + " and value: " + value);
 	}
 
 	@Override
 	public void addIntHeader(String name, int value) {
 		// TODO Auto-generated method stub
-		
+		log("addIntHeader called with name: " + name + " and value: " + value);
 	}
 
 	private final static VarHandle vhStatus = NgHttpRequest.ngx_http_request_t.varHandle(
@@ -406,7 +493,7 @@ public class NgResponse implements HttpServletResponse {
 			public String nextElement() {
 				NgHash.NgxTableElt current = next;
 				next = findNext();
-				return current.getValue();
+				return current == null ? null : current.getValue();
 			}
 			
 			@Override
@@ -444,6 +531,11 @@ public class NgResponse implements HttpServletResponse {
 			// no output
 			return 200;
 		}
+	}
+	
+	
+	public void log(String msg) {
+		System.out.println(msg);
 	}
 	
 }

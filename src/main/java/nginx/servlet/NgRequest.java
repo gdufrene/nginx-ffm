@@ -58,7 +58,8 @@ public class NgRequest implements HttpServletRequest {
 	@Override
 	public String getCharacterEncoding() {
 		// FIXME get from headers_in.content_type ?
-		return StandardCharsets.UTF_8.name();
+		// return StandardCharsets.UTF_8.name();
+		return StandardCharsets.ISO_8859_1.name();
 	}
 
 	@Override
@@ -74,7 +75,7 @@ public class NgRequest implements HttpServletRequest {
 		);
 	@Override
 	public int getContentLength() {
-		return (int) vh_content_length_n.get(req, 0L);
+		return (int) (getContentLengthLong());
 	}
 
 	@Override
@@ -366,7 +367,7 @@ public class NgRequest implements HttpServletRequest {
 			public String nextElement() {
 				NgHash.NgxTableElt current = next;
 				next = findNext();
-				return current.getValue();
+				return current == null ? null : current.getValue();
 			}
 			
 			@Override

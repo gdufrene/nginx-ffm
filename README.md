@@ -387,15 +387,48 @@ I checked current implemented methods inside NgRequest and NgResponse wrapper.
 
 ## Use with spring-mvc
 
-Now that a minimal set of servlet operations are implemented, I should : 
+To run a simple RestController, I fist added spring-webmvc dependency.
 
-- add spring-mvc as a dependency,
-- bootstrap a small annotation based context with a controller,
-- initialize a servletDispatcher and delegates incoming nginx request to that dispatcher,
+The easier way to delegate an nginx request is to use the DispatcherServlet.  
+To build one we must set up a WebApplicationContext with our controller and all other spring beans.
+
+Let's use an AnnotationConfigWebApplicationContext to set up everything with annotations.  
+A config class with @ComponentScan to search for controllers, and a @EnableWebMvc to search for your controllers mappings and views (if required).
+
+In a servlet container, when the server is ready, a ContextLoaderListener is in charge of initializing the context. So we need one and we need to provide a ServletContext to do so.
+
+ServletContext has a lot of features to interact with the servlet container. Right now we don't need much of operations to work with a simple RestController. get/set attributes methods are used by spring to store many references to beans and web context related things. Filters and Servlet registration could help later if I need more features.
+
+Creating a DispatcherServlet is required because I don't have self-registration features.  
+Servlet init method is usally called by servlet container when a new servlet is registered, so I need to call that method, it requires a ServletConfig object. It's 4 simple methods, not a big deal.
+
+We have to trigger contextInitialized on the contextListener and refreshing the web application context to populate our beans and controllers.
+
+Some logs confirm that things are running ...
+
+```
+Initializing Spring DispatcherServlet 'dispatcher'
+INFOS: Initializing Servlet 'dispatcher'
+INFOS: Completed initialization in 160 ms
+Initializing Spring root WebApplicationContext
+INFOS: Root WebApplicationContext: initialization started
+INFOS: Root WebApplicationContext initialized in 0 ms
+```
+
+Great, now each Nginx request can we wrapped as HttpServletRequest and Response, then call "service" servlet method to let spring do its magic.
+
+Controller should be called, spring set some headers, and write the content to the servlet output stream which flows to nginx buffers.
+
+Right now I still have to call some technical methods to discard request body memory (ngx_http_discard_request_body), to transmit http headers to the client (ngx_http_send_header), then write the nginx buffer to the client (thru response flushing).
+
+We would ease that process within the servlet response writer, when buffer is flushed, doing all that work is possible.
+
+I had trouble because of misaligned structs data, then a memory crash on http2 when no charset is set.  
+Those kinds of things can be time-consuming to spot and analyze.
 
 Maybe I can try to dispatch nginx request log with slf4j to be able to configure level and pattern with simple configuration.
 
-Maybe I can try to implement a spring-boot autoconf that configure and start nginx and use it as web server rather than tomcat.f
+Maybe I can try to implement a spring-boot autoconf that configure and start nginx and use it as web server rather than tomcat.
 
 
 ## Other ideas ?
