@@ -123,3 +123,14 @@ NG_HOME=/path/to/nginx java --enable-native-access=ALL-UNNAMED -cp target/classe
 open http://localhost:8000/ 
 hit Ctrl+C in console to stop nginx.
 
+## Handle requests in java
+
+Some interfaces define nginx structs, one interface per header file.  
+Each interface contains one or many structs, var handlers, method handlers and sometimes wrap structs in a java object.
+
+Different design choices can be done to map data and call functions ...
+ * Lonely interface with only structs definitions , (such as NgArray)
+ * Interface with varHandles and static methods , (such as NgString)
+ * Neutral interface with an Implementation class , (such as NgPool)
+ * Interface with inner class , (NgChainLink in NgBuffer)
+ * Interface with embedded record , (NgxTableElt in NgHash)
