@@ -128,9 +128,16 @@ hit Ctrl+C in console to stop nginx.
 Some interfaces define nginx structs, one interface per header file.  
 Each interface contains one or many structs, var handlers, method handlers and sometimes wrap structs in a java object.
 
-Different design choices can be done to map data and call functions ...
+Different design choices can be done to map data and call native functions ...
  * Lonely interface with only structs definitions , (such as NgArray)
  * Interface with varHandles and static methods , (such as NgString)
  * Neutral interface with an Implementation class , (such as NgPool)
  * Interface with inner class , (NgChainLink in NgBuffer)
  * Interface with embedded record , (NgxTableElt in NgHash)
+
+## Handle spring controllers
+
+* Implements Servlet API with NgRequest and NgResponse. 
+* Create a new RequestHandler that create a SpringContext and DispatcherServlet,  
+  and delegate request handling to DispatcherServlet.
+

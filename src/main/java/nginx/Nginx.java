@@ -11,11 +11,13 @@ import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import app.SpringApp;
 import nginx.core.NgBuffer;
 import nginx.core.NgCore;
 import nginx.core.NgGlobal;
 import nginx.core.NgPool;
 import nginx.http.NgHttpRequest;
+import nginx.spring.SpringRequestHandler;
 
 public class Nginx  {
 	
@@ -59,7 +61,8 @@ public class Nginx  {
 
 	public static void main(String[] args) {
 		Nginx nginx = new Nginx();
-		nginx.start(Nginx::sayHello);
+		RequestHandler handler = new SpringRequestHandler(SpringApp.class);
+		nginx.start(handler);
 	}
 
 	public void start(RequestHandler handler) {
